@@ -1,0 +1,16 @@
+target/
+dependency-reduced-pom.xml
+hs_err_*.log
+
+# bloop and metals
+.bloop
+.bsp
+
+# metals
+project/metals.sbt
+.metals
+
+.scalafmt.conf
+
+# hadoop
+/logs

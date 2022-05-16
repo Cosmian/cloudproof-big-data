@@ -1,0 +1,133 @@
+{
+  "tag" : "PrivateKey",
+  "value" : [ {
+    "tag" : "KeyBlock",
+    "value" : [ {
+      "tag" : "KeyFormatType",
+      "type" : "Enumeration",
+      "value" : "AbeUserDecryptionKey"
+    }, {
+      "tag" : "KeyValue",
+      "value" : [ {
+        "tag" : "KeyMaterial",
+        "type" : "ByteString",
+        "value" : "000000028DC5517E8D662802A71BB8F167E8786FB4611F1C7F1E39C4F842D17C35FA77089DDEA0BCE7EFC236EF06F5368DAF70CB012DF1E664608CC3C8399518F290DB66F6BB3C55F8836DD394AAD2C5426589725628F843B72CF9F2570D18A722C155558434C3106E5CD5D4D5B59D68A7840DD858A6EB52A30D99C1E55F2E9B873008569A6128E137280F10509C530F6911DFDB04B0D165E6A3C1B791C09647E66C6FF203C8E01197DC0CAA079E4D9B68796485BE49B484053BE280EF7B0925F0EB574F0000000200000002000000020000000501000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000FFFFFFFFFE5BFEFF02A4BD5305D8A10908D83933487D9D2953A7ED73"
+      }, {
+        "tag" : "Attributes",
+        "value" : [ {
+          "tag" : "CryptographicAlgorithm",
+          "type" : "Enumeration",
+          "value" : "ABE"
+        }, {
+          "tag" : "KeyFormatType",
+          "type" : "Enumeration",
+          "value" : "AbeUserDecryptionKey"
+        }, {
+          "tag" : "Link",
+          "value" : [ ]
+        }, {
+          "tag" : "ObjectType",
+          "type" : "Enumeration",
+          "value" : "PrivateKey"
+        }, {
+          "tag" : "VendorAttributes",
+          "value" : [ {
+            "tag" : "VendorAttributes",
+            "value" : [ {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "cosmian"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_attributes"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_policy"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_access_policy"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_header_uid"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_master_private_key_id"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_master_public_key_id"
+            }, {
+              "tag" : "VendorIdentification",
+              "type" : "TextString",
+              "value" : "cosmian"
+            }, {
+              "tag" : "AttributeName",
+              "type" : "TextString",
+              "value" : "abe_master_private_key_id"
+            }, {
+              "tag" : "AttributeValue",
+              "type" : "ByteString",
+              "value" : "39643562633030652D306435302D346362622D386436322D313464393964363463643465"
+            } ]
+          }, {
+            "tag" : "VendorAttributes",
+            "value" : [ {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "cosmian"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_attributes"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_policy"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_access_policy"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_header_uid"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_master_private_key_id"
+            }, {
+              "tag" : "String",
+              "type" : "TextString",
+              "value" : "abe_master_public_key_id"
+            }, {
+              "tag" : "VendorIdentification",
+              "type" : "TextString",
+              "value" : "cosmian"
+            }, {
+              "tag" : "AttributeName",
+              "type" : "TextString",
+              "value" : "abe_access_policy"
+            }, {
+              "tag" : "AttributeValue",
+              "type" : "ByteString",
+              "value" : "7B22416E64223A5B7B2241747472223A22456E746974793A3A424E505046227D2C7B2241747472223A22436F756E7472793A3A4672616E6365227D5D7D"
+            } ]
+          } ]
+        } ]
+      } ]
+    }, {
+      "tag" : "CryptographicAlgorithm",
+      "type" : "Enumeration",
+      "value" : "ABE"
+    }, {
+      "tag" : "CryptographicLength",
+      "type" : "Integer",
+      "value" : 340
+    } ]
+  } ]
+}

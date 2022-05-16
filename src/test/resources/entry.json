@@ -1,0 +1,196 @@
+{
+    "payload": {
+        "paymentFlowChainReferences": {
+            "exctnFlwCntxt": {
+                "prvsEvtTp": {
+                    "tpId": "Sending"
+                },
+                "nxtAsst": "AP07902",
+                "prvsAsst": "AP07902",
+                "stagSts": "OK",
+                "stagId": "DebitBooking"
+            },
+            "exctnInfrstrctrcntxt": {
+                "curDataCenterId": "NA",
+                "curSvrId": "NA"
+            }
+        },
+        "businessPaymentInformation": {
+            "xchgRateInf": -1.0,
+            "eqvtAmt": -1.0,
+            "bkBIC": "BNPADEFF",
+            "mndtRltdInf": {
+                "mndtId": [
+                    "FR7618025002000402056047450"
+                ],
+                "dtOfSgntr": "2022-01-21"
+            },
+            "reqdExctnDt": "2022-01-25",
+            "pmtBizCntxt": {
+                "drctn": {
+                    "ITRId": "OUT"
+                },
+                "amt": {
+                    "instdCcy": "EUR",
+                    "instdAmt": 0.04
+                },
+                "subPdctId": {
+                    "ITRId": "DD"
+                },
+                "pdctId": {
+                    "ITRId": "SDD"
+                }
+            },
+            "intrBkSttlmDt": "2022-01-25",
+            "intrBkSttlmAmt": 0.04,
+            "miscRef": [
+                {
+                    "refVal": "PFTETE20220121140923000000000015853",
+                    "refTp": {
+                        "ITRId": "endToEndId"
+                    }
+                },
+                {
+                    "refVal": "6022021AB69NYSDT",
+                    "refTp": {
+                        "OEId": "PE Reference",
+                        "ITRId": "LocalTrxID"
+                    }
+                },
+                {
+                    "refVal": "PFTETE20220121140923000000000015853",
+                    "refTp": {
+                        "ITRId": "InstrId"
+                    }
+                },
+                {
+                    "refVal": "FR7618025002000402056047450",
+                    "refTp": {
+                        "ITRId": "MndtId"
+                    }
+                },
+                {
+                    "refVal": "6022025AABX0IG00",
+                    "refTp": {
+                        "ITRId": "APMRefId"
+                    }
+                }
+            ],
+            "cdtr": {
+                "cdtrNm": "SIT-BDDF/DD/BDDF/OPEN/BRT/ACC2/France",
+                "cdtrAcct": "DE21370106001027291934",
+                "cdtrAgt": "BNPADEFF",
+                "cdtrId": [
+                    {
+                        "id": "BE12ZZZ008D000004542",
+                        "type": {
+                            "ITRId": "Creditor Scheme ID"
+                        }
+                    }
+                ]
+            },
+            "dbtr": {
+                "dbtrAcct": "FR7618025002000402056047450",
+                "dbtrAgt": "SWIDFRA1113",
+                "dbtrNm": "SIT/DD/IP/OPEN/ACC1/Ethias"
+            },
+            "rmtInf": "PFTREM              000000000015853",
+            "ultmtDbtr": {
+                "ultmtDbtrNm": "PT01FP101916191601130312121111130312"
+            },
+            "clrNtwk": "EBA",
+            "intrBkSttlmCcy": "EUR",
+            "pmtTpInf": {
+                "lclInstrm": {
+                    "cd": "CORE"
+                },
+                "seqTp": "RCUR"
+            }
+        },
+        "paymentEngineRunningData": {
+            "sndgDts": [
+                {
+                    "sndDt": "2022-01-24",
+                    "sndDtTp": "pacs.003.001.02"
+                }
+            ],
+            "DTFStatus": "O"
+        }
+    },
+    "header": {
+        "functional": {
+            "mainBusinessObject": {
+                "id": "6022021AB69NYSDT",
+                "type": {
+                    "OEId": "PE Reference",
+                    "ITRId": "Transaction"
+                }
+            },
+            "language": "BE",
+            "currentEventProducer": {
+                "processId": "EUDBD701/EUBD08",
+                "processType": {
+                    "OEId": "CurProgram"
+                },
+                "stageId": "DebitBooking"
+            },
+            "eventType": {
+                "OEId": "DebitBookingRequest",
+                "version": "2.0.0"
+            },
+            "secondaryBusinessObjects": [
+                {
+                    "id": "0722021AB6XFLSDG",
+                    "type": {
+                        "OEId": "PE Reference",
+                        "ITRId": "PaymentOut"
+                    }
+                },
+                {
+                    "id": "0722021AB6XFLSDG",
+                    "type": {
+                        "OEId": "PE Reference",
+                        "ITRId": "PaymentIn"
+                    }
+                },
+                {
+                    "id": "6022021AB69NYSDT",
+                    "type": {
+                        "OEId": "PE Reference",
+                        "ITRId": "TransactionOut"
+                    }
+                },
+                {
+                    "id": "6022021AB69NYSDT",
+                    "type": {
+                        "OEId": "PE Reference",
+                        "ITRId": "TransactionIn"
+                    }
+                }
+            ],
+            "parentProcess": {
+                "processId": "EUDUNDT1/EUBD06",
+                "processType": {
+                    "OEId": "PrvProgram"
+                }
+            },
+            "localBusinessTime": "2022-01-25T13:35:31.297Z",
+            "correlationSource": {
+                "correlationSourceType": {
+                    "ITRId": "NA"
+                },
+                "correlationSourceId": "NA"
+            }
+        },
+        "technical": {
+            "eventTechId": "6c2524a0-34de-4069-bc4a-46d378942523",
+            "timeZone": "Europe/Paris",
+            "channelType": {
+                "OEId": "84"
+            },
+            "eventNormVersion": "2.4.1",
+            "apCode": "AP07902",
+            "timestamp": "2022-01-25T13:35:29.637Z"
+        }
+    }
+}

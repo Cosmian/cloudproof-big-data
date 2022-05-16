@@ -1,0 +1,19 @@
+{
+    "cSpell.words": [
+        "appender",
+        "BCEF",
+        "BNPPF",
+        "ciphertext",
+        "cloudproof",
+        "Cloudproof",
+        "datacenter",
+        "Datacenter",
+        "datastax",
+        "EUDBD",
+        "HDFS",
+        "hdfso",
+        "mkdir",
+        "upsert"
+    ],
+    "java.configuration.updateBuildConfiguration": "automatic"
+}
