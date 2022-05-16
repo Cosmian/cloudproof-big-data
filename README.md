@@ -216,7 +216,27 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
     "country=Spain"
 ```
 
-As expected the Super ADmin can find users in all countries and view all details
+Bob can read the employee number part of all users in Spain, but not their marketing part
+
+```bash
+java -jar target/cloudproof-demo-1.0.0.jar --search \
+    -k src/test/resources/keys/user_Bob_key.json \
+    -o src/test/resources/dec/ \
+    -c search_Bob.txt \
+    "hdfso://root@localhost:9000/user/root/" \
+    "country=Spain"
+```
+
+```
+{"firstName":"Gavin","lastName":"Bailey","country":"Spain","employeeNumber":"NVH67DKP6FV"}
+{"firstName":"Jerry","lastName":"Gonzales","country":"Spain","employeeNumber":"RBU57EWQ8MI"}
+{"firstName":"Felix","lastName":"Garcia","country":"Spain","employeeNumber":"EQN94VSX2IJ"}
+{"firstName":"Wang","lastName":"Chan","country":"Spain","employeeNumber":"VYY77VOW0QR"}
+...
+```
+
+
+As expected the Super Admin can find users in all countries and view all details
 
 
 ```bash

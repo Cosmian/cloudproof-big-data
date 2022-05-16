@@ -1,4 +1,4 @@
-package com.cosmian.bnpp;
+package com.cosmian.cloudproof_demo;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,8 +16,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.cosmian.cloudproof_demo.App;
-import com.cosmian.cloudproof_demo.DseDB;
 import com.cosmian.cloudproof_demo.sse.Sse.Bytes;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.Sse.WordHash;

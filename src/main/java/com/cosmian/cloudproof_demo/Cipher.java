@@ -285,33 +285,6 @@ public class Cipher implements AutoCloseable {
         return totalTime;
     }
 
-    // Attr[] getAttributes(String processId) throws CosmianException {
-
-    // if (processId.startsWith("EUDBD101")) {
-    // return new Attr[] { new Attr("Entity", "BNPPF"), new Attr("Country",
-    // "France") };
-    // }
-
-    // if (processId.startsWith("EUDBD501")) {
-    // return new Attr[] { new Attr("Entity", "BNPPF"), new Attr("Country", "Italy")
-    // };
-    // }
-
-    // if (processId.startsWith("EUDBD601")) {
-    // return new Attr[] { new Attr("Entity", "BCEF"), new Attr("Country", "France")
-    // };
-    // }
-
-    // if (processId.startsWith("EUDBD701")) {
-    // return new Attr[] { new Attr("Entity", "CIB"), new Attr("Country", "Belgium")
-    // };
-    // }
-
-    // return new Attr[] { new Attr("Entity", "CashMgt"), new Attr("Country",
-    // "France") };
-
-    // }
-
     @Override
     public void close() {
         this.sseDb.close();

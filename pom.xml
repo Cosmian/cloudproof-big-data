@@ -8,7 +8,7 @@
   <version>1.0.0</version>
 
   <name>cloudproof-java-demo</name>
-  <description>Demonstrateur Cosmian for BNPP</description>
+  <description>Cosmian Demo for CloudProof encryption</description>
   <url>https://github.com/Cosmian/cloudproof-java-demo</url>
   <licenses>
     <license>

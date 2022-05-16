@@ -1,4 +1,4 @@
-package com.cosmian.bnpp;
+package com.cosmian.cloudproof_demo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -11,8 +11,6 @@ import java.util.Set;
 import java.util.logging.Level;
 
 import com.cosmian.CosmianException;
-import com.cosmian.cloudproof_demo.App;
-import com.cosmian.cloudproof_demo.DseDB;
 import com.cosmian.cloudproof_demo.sse.Sse;
 import com.cosmian.cloudproof_demo.sse.Sse.DbUid;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;

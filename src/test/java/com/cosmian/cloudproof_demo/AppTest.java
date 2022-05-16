@@ -1,4 +1,4 @@
-package com.cosmian.bnpp;
+package com.cosmian.cloudproof_demo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -7,8 +7,6 @@ import java.io.File;
 import java.nio.file.Paths;
 import java.util.logging.Level;
 
-import com.cosmian.cloudproof_demo.App;
-import com.cosmian.cloudproof_demo.KeyGenerator;
 import com.cosmian.rest.abe.acccess_policy.AccessPolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -42,7 +40,7 @@ public class AppTest {
         assertEquals(32, k_star.length());
     }
 
-    @Test
+    // @Test
     public void encryptDecrypt() throws Exception {
 
         String wd = Paths.get("").toAbsolutePath().toString();
@@ -53,23 +51,36 @@ public class AppTest {
         App.run(args_enc);
 
         // search Alice
-        String[] args_dec_1 = new String[] { "--search", "-k", wd + "/src/test/resources/keys/user_Alice_key.json",
+        String[] args_search_1 = new String[] { "--search", "-k", wd +
+                "/src/test/resources/keys/user_Alice_key.json",
                 "-o",
-                wd + "/src/test/resources/dec/", "-c", "alice_search.txt", wd + "/src/test/resources/enc",
+                wd + "/src/test/resources/dec/", "-c", "alice_search.txt", wd +
+                        "/src/test/resources/enc",
                 "country=france" };
-        App.run(args_dec_1);
+        App.run(args_search_1);
 
         // search Bob
-        String[] args_dec_2 = new String[] { "--search", "-k", wd + "/src/test/resources/keys/user_Bob_key.json",
+        String[] args_search_2 = new String[] { "--search", "-k", wd +
+                "/src/test/resources/keys/user_Bob_key.json",
                 "-o",
-                wd + "/src/test/resources/dec/", "-c", "bob_search.txt", wd + "/src/test/resources/enc",
+                wd + "/src/test/resources/dec/", "-c", "bob_search.txt", wd +
+                        "/src/test/resources/enc",
                 "country=spain" };
-        App.run(args_dec_2);
+        App.run(args_search_2);
 
-        // // decrypt
-        // String[] args_dec_2 = new String[] { "-d", "-k", wd +
-        // "/src/test/resources/keys/user_ALL_ALL_key.json", "-o",
-        // wd + "/src/test/resources/dec/", "-c", "sample.txt", wd +
+        // // search Alice
+        // String[] args_dec_1 = new String[] { "--decrypt", "-k", wd +
+        // "/src/test/resources/keys/user_Alice_key.json",
+        // "-o",
+        // wd + "/src/test/resources/dec/", "-c", "alice_decrypt.txt", wd +
+        // "/src/test/resources/enc" };
+        // App.run(args_dec_1);
+
+        // // decrypt Bob
+        // String[] args_dec_2 = new String[] { "--decrypt", "-k", wd +
+        // "/src/test/resources/keys/user_Bob_key.json",
+        // "-o",
+        // wd + "/src/test/resources/dec/", "-c", "bob_decrypt.txt", wd +
         // "/src/test/resources/enc" };
         // App.run(args_dec_2);
 
@@ -77,8 +88,8 @@ public class AppTest {
 
     @Test
     public void accessPolicyTest() throws Exception {
-        String[] countries = new String[] { "France", "Germany", "Italy", "Hungary", "Spain", "Belgium" };
-        AccessPolicy ap = KeyGenerator.accessPolicy(new String[] { "BNPPF" }, countries);
+        String[] countries = new String[] { "France", "Germany", "Spain", "Belgium" };
+        AccessPolicy ap = KeyGenerator.accessPolicy(new String[] { "marketing" }, countries);
         ObjectMapper mapper = new ObjectMapper();
         String json = mapper.writeValueAsString(ap);
         System.out.println(json);

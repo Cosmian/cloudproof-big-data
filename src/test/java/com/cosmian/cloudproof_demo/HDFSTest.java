@@ -1,4 +1,4 @@
-package com.cosmian.bnpp;
+package com.cosmian.cloudproof_demo;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,8 +13,6 @@ import java.util.Iterator;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.cosmian.cloudproof_demo.App;
-import com.cosmian.cloudproof_demo.AppException;
 import com.cosmian.cloudproof_demo.fs.HDFSOriginal;
 
 import org.apache.hadoop.conf.Configuration;
