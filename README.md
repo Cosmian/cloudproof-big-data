@@ -1,16 +1,25 @@
 # Cloudproof-java-demo
-## Key Policy Attribute Based Encryption (KP-ABE) and Symmetric Searchable Encryption (SSE)
+## Cloudproof encryption: encryption and secure search of large (Big Data) repository in the cloud
 
-Encryption of transactions to HDFS using a public key and access policy attributes.
-Decryption of authorized transaction from HDFS using a private key with access policies.
+See the [documentation](https://docs.cosmian.com/cloudproof_encryption/use_cases_benefits/) for benefits, uses cases and technological details.
+
+Encrypted indexing and encryption of records to HDFS using a public key and policy attributes.
+
+Encrypted search and decryption of authorized transaction from HDFS using a private key that holds an access policy.
+
+All data encrypted with Policy attributes are stored on a cloud type system, a Hadoop Distributed File System in this demo.
+
+Encrypted indexes are stored in a cloud-type key-value store, Cassandra in this demo.
+
+At no time the cloud learns anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
 
 
-  - [Key Policy Attribute Based Encryption (KP-ABE) and Symmetric Searchable Encryption (SSE)](#key-policy-attribute-based-encryption-kp-abe-and-symmetric-searchable-encryption-sse)
+
+  - [Cloudproof encryption: large (Big Data) repository encrypted indexing and encrypted partitions with attributes](#cloudproof-encryption-large-big-data-repository-encrypted-indexing-and-encrypted-partitions-with-attributes)
     - [Flow Overview](#flow-overview)
       - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
       - [Attributes Based Encryption](#attributes-based-encryption)
     - [Policy](#policy)
-    - [Policy Attributes](#policy-attributes)
     - [User Keys](#user-keys)
   - [Software](#software)
     - [Example Usage](#example-usage)
@@ -19,12 +28,16 @@ Decryption of authorized transaction from HDFS using a private key with access p
       - [Direct Decryption](#direct-decryption)
     - [Building](#building)
     - [abe-gpsw](#abe-gpsw)
+      - [Building abe-gpsw for a different glibc](#building-abe-gpsw-for-a-different-glibc)
     - [cosmian_java_lib](#cosmian_java_lib)
     - [main program: cloudproof-demo](#main-program-cloudproof-demo)
   - [Setting up a test hadoop environment](#setting-up-a-test-hadoop-environment)
     - [Listing Hadoop files](#listing-hadoop-files)
   - [Setting up Cassandra DSE](#setting-up-cassandra-dse)
     - [Running locally](#running-locally)
+  - [Deploying via zip](#deploying-via-zip)
+
+<!-- /code_chunk_output -->
 
 
 ### Flow Overview
@@ -72,16 +85,19 @@ Five indexes are created on the following patterns:
  - "country="+country
 
 All values are converted to lower case before indexing
+
 Values are indexed in a DSE Cassandra database 5.1.20. Everything is encrypted in the DB.
 
 A search for "Douglas" will retrieve all the Douglas, first name or last name
+
 A search for "first=Douglas" will only retrieve the Douglas used as a first name
 
 #### Attributes Based Encryption
 
  - Enc: encryption with an ABE public key and policy attributes determined from the content of the transaction.
-  Each transaction/line is considered unique and becomes a file in HDFS with name `Base58(SHA-256(content))`
- - Dec: decryption with an user private key of authorised transactions collected in a clear text file. The access policy of the key determines which transactions can be decrypted.
+Each transaction/line is considered unique and becomes a file in HDFS with name `Base58(SHA-256(content))`
+
+ - Dec: decryption with an user private key of authorised records collected in a clear text file. The access policy of the key determines which records can be decrypted.
 
 ### Policy
 
@@ -93,8 +109,11 @@ Two non hierarchical axes:
 The `country` axis partitions the rows of the database (on the value of the `country` value), while the `department` axis partitions the columns.
 
 The `firstName`, `lastName` and `country` columns are visible for any user with a valid key.
+
 The `email`, `region` and`phone` columns are only visible to a user who has a `department::marketing` attribute in its key access policy.
+
 The `employeeNumber` column is only visible to a user who has a `department::HR` attribute in its key access policy.
+
 The `security` column is only visible to the super admin.
 
 
