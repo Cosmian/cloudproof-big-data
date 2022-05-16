@@ -6,14 +6,17 @@
         "ciphertext",
         "cloudproof",
         "Cloudproof",
+        "Cosmian",
         "datacenter",
         "Datacenter",
         "datastax",
         "EUDBD",
+        "hadoop",
         "HDFS",
         "hdfso",
         "mkdir",
-        "upsert"
+        "upsert",
+        "upserting"
     ],
     "java.configuration.updateBuildConfiguration": "automatic"
 }

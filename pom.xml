@@ -39,10 +39,15 @@
   </properties>
 
   <dependencies>
-    <dependency>
+    <!-- <dependency>
       <groupId>com.jayway.jsonpath</groupId>
       <artifactId>json-path</artifactId>
       <version>2.7.0</version>
+    </dependency> -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.7.36</version>
     </dependency>
     <dependency>
       <groupId>com.cosmian</groupId>
@@ -75,6 +80,12 @@
       <artifactId>junit-jupiter-api</artifactId>
       <version>5.4.2</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.json</groupId>
+      <artifactId>json</artifactId>
+      <version>20220320</version>
+      <!-- <type>bundle</type> -->
     </dependency>
   </dependencies>
 

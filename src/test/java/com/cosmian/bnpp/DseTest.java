@@ -13,8 +13,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.cosmian.cloudproof_demo.App;
 import com.cosmian.cloudproof_demo.DseDB;
 import com.cosmian.cloudproof_demo.sse.Sse.Bytes;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
@@ -27,7 +29,8 @@ public class DseTest {
 
     @BeforeAll
     public static void before_all() {
-        TestUtils.initLogging();
+        App.configureLog4j();
+        App.initLogging(Level.INFO);
     }
 
     private <B extends Bytes> HashMap<B, byte[]> generateEntries(Random rd, Class<B> clazz, int numEntries,

@@ -66,12 +66,12 @@ public class KeyGenerator {
 
         Abe abe = new Abe(new RestClient(KeyGenerator.kmsServerUrl(), KeyGenerator.apiKey()));
 
-        String[] entities = new String[] { "BCEF", "BNPPF", "CIB", "CashMgt" };
-        String[] countries = new String[] { "France", "Germany", "Italy", "Hungary", "Spain", "Belgium" };
+        String[] countries = new String[] { "France", "Spain", "Germany", "Other" };
+        String[] departments = new String[] { "marketing", "HR", "security", "other" };
 
         Policy policy = new Policy(100)
-                .addAxis("Entity", entities, false)
-                .addAxis("Country", countries, false);
+                .addAxis("country", countries, false)
+                .addAxis("department", departments, false);
 
         String[] ids = abe.createMasterKeyPair(policy);
         logger.info("Created Master Key: Private Key ID: " + ids[0] + ", Public Key ID: " + ids[1]);
@@ -97,25 +97,21 @@ public class KeyGenerator {
                     e.getCause());
         }
 
-        generateUserKey("BNPPF_France", abe, privateMasterKeyID,
-                accessPolicy(new String[] { "BNPPF" }, new String[] { "France" }));
+        generateUserKey("Alice", abe, privateMasterKeyID,
+                accessPolicy(new String[] { "France" }, new String[] { "marketing" }));
 
-        generateUserKey("BNPPF_Italy", abe, privateMasterKeyID,
-                accessPolicy(new String[] { "BNPPF" }, new String[] { "Italy" }));
+        generateUserKey("Bob", abe, privateMasterKeyID,
+                accessPolicy(new String[] { "Spain" }, new String[] { "HR" }));
 
-        generateUserKey("BCEF_France", abe, privateMasterKeyID,
-                accessPolicy(new String[] { "BCEF" }, new String[] { "France" }));
+        generateUserKey("Charlie", abe, privateMasterKeyID,
+                accessPolicy(new String[] { "France" }, new String[] { "HR" }));
 
-        generateUserKey("CIB_Belgium", abe, privateMasterKeyID,
-                accessPolicy(new String[] { "BCEF" }, new String[] { "Belgium" }));
+        generateUserKey("SuperAdmin", abe, privateMasterKeyID,
+                accessPolicy(new String[] { "France", "Spain", "Germany" },
+                        new String[] { "marketing", "HR", "security" }));
 
-        generateUserKey("BNPPF_ALL", abe, privateMasterKeyID, accessPolicy(new String[] { "BNPPF" }, countries));
-
-        generateUserKey("ALL_France", abe, privateMasterKeyID,
-                accessPolicy(entities, new String[] { "France" }));
-
-        generateUserKey("ALL_ALL", abe, privateMasterKeyID,
-                accessPolicy(entities, countries));
+        generateUserKey("Mallory", abe, privateMasterKeyID,
+                accessPolicy(new String[] { "Other" }, new String[] { "other" }));
 
     }
 
@@ -123,37 +119,37 @@ public class KeyGenerator {
      * Generate an access policy
      * (entity_1 | entity 2... | entity_n) & (country_1 | country 2... | country_n)
      * 
-     * @param entities
+     * @param departments
      * @param countries
      * @return
      */
-    public static AccessPolicy accessPolicy(String[] entities, String[] countries) throws CosmianException {
-
-        AccessPolicy entitiesPolicy;
-        if (entities.length == 0) {
-            throw new CosmianException("The policy must have at least one entity");
-        } else if (entities.length == 1) {
-            entitiesPolicy = new Attr("Entity", entities[0]);
-        } else {
-            entitiesPolicy = new Attr("Entity", entities[0]);
-            for (int i = 1; i < entities.length; i++) {
-                entitiesPolicy = new Or(entitiesPolicy, new Attr("Entity", entities[i]));
-            }
-        }
+    public static AccessPolicy accessPolicy(String[] countries, String[] departments) throws CosmianException {
 
         AccessPolicy countriesPolicy;
         if (countries.length == 0) {
-            throw new CosmianException("The policy must have at least one entity");
+            throw new CosmianException("The policy must have at least one country");
         } else if (countries.length == 1) {
-            countriesPolicy = new Attr("Country", countries[0]);
+            countriesPolicy = new Attr("country", countries[0]);
         } else {
-            countriesPolicy = new Attr("Country", countries[0]);
+            countriesPolicy = new Attr("country", countries[0]);
             for (int i = 1; i < countries.length; i++) {
-                countriesPolicy = new Or(countriesPolicy, new Attr("Country", countries[i]));
+                countriesPolicy = new Or(countriesPolicy, new Attr("country", countries[i]));
             }
         }
 
-        return new And(entitiesPolicy, countriesPolicy);
+        AccessPolicy departmentsPolicy;
+        if (departments.length == 0) {
+            throw new CosmianException("The policy must have at least one department");
+        } else if (departments.length == 1) {
+            departmentsPolicy = new Attr("department", departments[0]);
+        } else {
+            departmentsPolicy = new Attr("department", departments[0]);
+            for (int i = 1; i < departments.length; i++) {
+                departmentsPolicy = new Or(departmentsPolicy, new Attr("department", departments[i]));
+            }
+        }
+
+        return new And(countriesPolicy, departmentsPolicy);
     }
 
     void generateUserKey(String name, Abe abe, String privateMasterKeyID, AccessPolicy accessPolicy)

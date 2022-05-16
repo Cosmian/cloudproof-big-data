@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.logging.Level;
 
 import com.cosmian.cloudproof_demo.App;
 import com.cosmian.cloudproof_demo.KeyGenerator;
@@ -18,7 +19,8 @@ public class AppTest {
 
     @BeforeAll
     public static void before_all() {
-        TestUtils.initLogging();
+        App.configureLog4j();
+        App.initLogging(Level.FINER);
     }
 
     @Test
@@ -47,19 +49,29 @@ public class AppTest {
 
         // encrypt
         String[] args_enc = new String[] { "-e", "-k", wd + "/src/test/resources/keys/public_key.json", "-o",
-                wd + "/src/test/resources/enc/", wd + "/src/test/resources/sample8.txt" };
-        App.main(args_enc);
+                wd + "/src/test/resources/enc/", wd + "/src/test/resources/users.txt" };
+        App.run(args_enc);
 
-        // decrypt
-        String[] args_dec_1 = new String[] { "-d", "-k", wd + "/src/test/resources/keys/user_BNPPF_France_key.json",
+        // search Alice
+        String[] args_dec_1 = new String[] { "--search", "-k", wd + "/src/test/resources/keys/user_Alice_key.json",
                 "-o",
-                wd + "/src/test/resources/dec/", "-c", "sample8.txt", wd + "/src/test/resources/enc" };
-        App.main(args_dec_1);
+                wd + "/src/test/resources/dec/", "-c", "alice_search.txt", wd + "/src/test/resources/enc",
+                "country=france" };
+        App.run(args_dec_1);
 
-        // decrypt
-        String[] args_dec_2 = new String[] { "-d", "-k", wd + "/src/test/resources/keys/user_ALL_ALL_key.json", "-o",
-                wd + "/src/test/resources/dec/", "-c", "sample.txt", wd + "/src/test/resources/enc" };
-        App.main(args_dec_2);
+        // search Bob
+        String[] args_dec_2 = new String[] { "--search", "-k", wd + "/src/test/resources/keys/user_Bob_key.json",
+                "-o",
+                wd + "/src/test/resources/dec/", "-c", "bob_search.txt", wd + "/src/test/resources/enc",
+                "country=spain" };
+        App.run(args_dec_2);
+
+        // // decrypt
+        // String[] args_dec_2 = new String[] { "-d", "-k", wd +
+        // "/src/test/resources/keys/user_ALL_ALL_key.json", "-o",
+        // wd + "/src/test/resources/dec/", "-c", "sample.txt", wd +
+        // "/src/test/resources/enc" };
+        // App.run(args_dec_2);
 
     }
 

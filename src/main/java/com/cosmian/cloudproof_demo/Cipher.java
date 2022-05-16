@@ -33,9 +33,8 @@ import com.cosmian.jna.FfiException;
 import com.cosmian.jna.abe.EncryptedHeader;
 import com.cosmian.rest.abe.acccess_policy.Attr;
 import com.cosmian.rest.kmip.objects.PublicKey;
-import com.jayway.jsonpath.Configuration;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.spi.json.JsonProvider;
+
+import org.json.JSONObject;
 
 public class Cipher implements AutoCloseable {
 
@@ -98,7 +97,6 @@ public class Cipher implements AutoCloseable {
 
         try {
             // Provider that reads Json Paths
-            JsonProvider jsonProvider = Configuration.defaultConfiguration().jsonProvider();
 
             for (String inputPathString : this.inputs) {
                 InputPath inputPath = InputPath.parse(inputPathString);
@@ -107,8 +105,7 @@ public class Cipher implements AutoCloseable {
                     String inputFile = it.next();
                     try {
                         final long then = System.nanoTime();
-                        long[] results = processResource(jsonProvider, md, cacheHandle,
-                                inputPath.getFs().getInputStream(inputFile));
+                        long[] results = processResource(md, cacheHandle, inputPath.getFs().getInputStream(inputFile));
                         final long totalTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - then);
                         long totalEncryptionTime = results[0];
                         long totalLines = results[1];
@@ -136,7 +133,7 @@ public class Cipher implements AutoCloseable {
     /**
      * Process the resource, returning the average encryption time in millis
      */
-    long[] processResource(JsonProvider jsonProvider, MessageDigest sha256, int cache, InputStream is)
+    long[] processResource(MessageDigest sha256, int cache, InputStream is)
             throws AppException {
         // SSE Indexes-we want to accumulate some o that the servers does not learn
         // anything by running statistical analysis on what is inserted
@@ -153,29 +150,25 @@ public class Cipher implements AutoCloseable {
                 if (line.trim().length() == 0) {
                     continue;
                 }
+
+                JSONObject json = new JSONObject(line);
+
+                // line identity
                 byte[] lineBytes = line.getBytes(StandardCharsets.UTF_8);
                 byte[] hash = sha256.digest(lineBytes);
                 String encryptedFileName = Base58.encode(hash);
 
-                Object document = jsonProvider.parse(lineBytes);
-                // Determine indexes
-                final String direction = ((String) JsonPath.read(document,
-                        "$.payload.businessPaymentInformation.pmtBizCntxt.drctn.ITRId"))
-                        .toUpperCase();
-                String IBAN;
-                if (direction.equals("IN")) {
-                    IBAN = JsonPath.read(document, "$.payload.businessPaymentInformation.cdtr.cdtrAcct");
-                } else if (direction.equals("OUT")) {
-                    IBAN = JsonPath.read(document, "$.payload.businessPaymentInformation.dbtr.dbtrAcct");
-                } else {
-                    logger.severe("Unknown Direction: " + direction.toUpperCase() + "! Skipping record");
-                    continue;
-                }
-                final String country = IBAN.substring(0, 2).toUpperCase();
-                logger.fine(() -> "Indexing " + encryptedFileName + " [" + direction + ", " + country + "]");
-                HashSet<Word> set = new HashSet<>(2);
-                set.add(new Word(direction.getBytes(StandardCharsets.UTF_8)));
-                set.add(new Word(country.getBytes(StandardCharsets.UTF_8)));
+                String country = json.getString("country");
+
+                // Searchable Encryption
+                HashSet<Word> set = new HashSet<>(4);
+                String firstName = json.getString("firstName").toLowerCase();
+                String lastName = json.getString("lastName").toLowerCase();
+                set.add(new Word(firstName.getBytes(StandardCharsets.UTF_8)));
+                set.add(new Word(("first=" + firstName).getBytes(StandardCharsets.UTF_8)));
+                set.add(new Word(lastName.getBytes(StandardCharsets.UTF_8)));
+                set.add(new Word(("last=" + lastName).getBytes(StandardCharsets.UTF_8)));
+                set.add(new Word(("country=" + country.toLowerCase()).getBytes(StandardCharsets.UTF_8)));
                 dbUidToWords.put(new DbUid(hash), set);
                 if (dbUidToWords.size() >= SSE_BATCH) {
                     try {
@@ -188,42 +181,47 @@ public class Cipher implements AutoCloseable {
                     dbUidToWords.clear();
                 }
 
-                // Map process ID to attributes
-                String processId = JsonPath.read(document, "$.header.functional.currentEventProducer.processId");
-                Attr[] attributes;
-                try {
-                    attributes = getAttributes(processId);
-                } catch (CosmianException e) {
-                    throw new AppException("Failed Creating the PolicyAttributes: " + e.getMessage());
-                }
-
-                // Measure Encryption time (quick and dirt - need a micro benchmark tool to do
-                // this properly)
-                final long then = System.nanoTime();
-                EncryptedHeader encryptedHeader;
-                try {
-                    encryptedHeader = Ffi.encryptHeaderUsingCache(cache, attributes);
-                } catch (FfiException | CosmianException e) {
-                    throw new AppException("Failed to encrypt the header: " + e.getMessage(), e);
-                }
-                byte[] encryptedBlock;
-                try {
-                    encryptedBlock = Ffi.encryptBlock(encryptedHeader.getSymmetricKey(), hash, 0, lineBytes);
-                } catch (FfiException e) {
-                    throw new AppException("Failed to encrypt the content: " + e.getMessage(), e);
-                }
-                totalTime += TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - then);
-
-                // The size of the header as an int in BE bytes
-                ByteBuffer headerSize = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
-                        .putInt(encryptedHeader.getEncryptedHeaderBytes().length);
-
-                // Write the result
+                // Attributes Encryption
                 ByteArrayOutputStream bao = new ByteArrayOutputStream();
-                bao.write(headerSize.array());
-                bao.write(encryptedHeader.getEncryptedHeaderBytes());
-                bao.write(encryptedBlock);
-                bao.flush();
+
+                // get country attribute
+                Attr country_attribute = new Attr("country", country);
+
+                Attr[] common_attributes = new Attr[] { country_attribute, new Attr("department", "marketing"),
+                        new Attr("department", "HR") };
+                JSONObject common_json = new JSONObject();
+                common_json.put("firstName", json.getString("firstName"));
+                common_json.put("lastName", json.getString("lastName"));
+                common_json.put("country", country);
+                totalTime += encryptPart(bao, cache, common_attributes, hash,
+                        common_json.toString().getBytes(StandardCharsets.UTF_8));
+
+                // marketing part of the file
+                Attr[] mkg_attributes = new Attr[] { country_attribute, new Attr("department", "marketing") };
+                // we want all but employeeNumber and security
+                JSONObject mkg_json = new JSONObject();
+                mkg_json.put("phone", json.getString("phone"));
+                mkg_json.put("email", json.getString("email"));
+                mkg_json.put("region", json.getString("region"));
+                // json.keySet().stream()
+                // .filter(k -> !(k.equals("employeeNumber") || k.equals("security")))
+                // .forEach(k -> mkg_json.put(k, json.getString(k)));
+                totalTime += encryptPart(bao, cache, mkg_attributes, hash,
+                        mkg_json.toString().getBytes(StandardCharsets.UTF_8));
+
+                // HR part of the file
+                Attr[] hr_attributes = new Attr[] { country_attribute, new Attr("department", "HR") }; // marketing
+                JSONObject hr_json = new JSONObject();
+                hr_json.put("employeeNumber", json.getString("employeeNumber"));
+                totalTime += encryptPart(bao, cache, hr_attributes, hash,
+                        hr_json.toString().getBytes(StandardCharsets.UTF_8));
+
+                // security part of the file
+                Attr[] security_attributes = new Attr[] { country_attribute, new Attr("department", "security") }; // marketing
+                JSONObject security_json = new JSONObject();
+                security_json.put("security", json.getString("security"));
+                totalTime += encryptPart(bao, cache, security_attributes, hash,
+                        security_json.toString().getBytes(StandardCharsets.UTF_8));
 
                 this.output.getFs().writeFile(this.output.getDirectory().resolve(encryptedFileName).toString(),
                         bao.toByteArray());
@@ -243,30 +241,76 @@ public class Cipher implements AutoCloseable {
             return new long[] { totalTime, numLines, sseTime };
         } catch (IOException e) {
             throw new AppException("an /IO Error occurred:" + e.getMessage(), e);
+        } catch (CosmianException e) {
+            throw new AppException(e.getMessage(), e);
         }
     }
 
-    Attr[] getAttributes(String processId) throws CosmianException {
-
-        if (processId.startsWith("EUDBD101")) {
-            return new Attr[] { new Attr("Entity", "BNPPF"), new Attr("Country", "France") };
+    long encryptPart(ByteArrayOutputStream bao, int encryptionCache, Attr[] attributes, byte[] hash, byte[] clearText)
+            throws AppException {
+        // Measure Encryption time (quick and dirt - need a micro benchmark tool to do
+        // this properly)
+        final long then = System.nanoTime();
+        EncryptedHeader encryptedHeader;
+        try {
+            encryptedHeader = Ffi.encryptHeaderUsingCache(encryptionCache, attributes);
+        } catch (FfiException | CosmianException e) {
+            throw new AppException("Failed to encrypt the header: " + e.getMessage(), e);
         }
-
-        if (processId.startsWith("EUDBD501")) {
-            return new Attr[] { new Attr("Entity", "BNPPF"), new Attr("Country", "Italy") };
+        byte[] encryptedBlock;
+        try {
+            encryptedBlock = Ffi.encryptBlock(encryptedHeader.getSymmetricKey(), hash, 0, clearText);
+        } catch (FfiException e) {
+            throw new AppException("Failed to encrypt the content: " + e.getMessage(), e);
         }
+        long totalTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - then);
 
-        if (processId.startsWith("EUDBD601")) {
-            return new Attr[] { new Attr("Entity", "BCEF"), new Attr("Country", "France") };
+        // The size of the header as an int in BE bytes
+        ByteBuffer headerSize = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
+                .putInt(encryptedHeader.getEncryptedHeaderBytes().length);
+        // The size of the header as an int in BE bytes
+        ByteBuffer blockSize = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN)
+                .putInt(encryptedBlock.length);
+
+        // Write the result
+        try {
+            bao.write(headerSize.array());
+            bao.write(encryptedHeader.getEncryptedHeaderBytes());
+            bao.write(blockSize.array());
+            bao.write(encryptedBlock);
+            bao.flush();
+        } catch (IOException e) {
+            throw new AppException("Failed to write the encrypted bytes: " + e.getMessage(), e);
         }
-
-        if (processId.startsWith("EUDBD701")) {
-            return new Attr[] { new Attr("Entity", "CIB"), new Attr("Country", "Belgium") };
-        }
-
-        return new Attr[] { new Attr("Entity", "CashMgt"), new Attr("Country", "France") };
-
+        return totalTime;
     }
+
+    // Attr[] getAttributes(String processId) throws CosmianException {
+
+    // if (processId.startsWith("EUDBD101")) {
+    // return new Attr[] { new Attr("Entity", "BNPPF"), new Attr("Country",
+    // "France") };
+    // }
+
+    // if (processId.startsWith("EUDBD501")) {
+    // return new Attr[] { new Attr("Entity", "BNPPF"), new Attr("Country", "Italy")
+    // };
+    // }
+
+    // if (processId.startsWith("EUDBD601")) {
+    // return new Attr[] { new Attr("Entity", "BCEF"), new Attr("Country", "France")
+    // };
+    // }
+
+    // if (processId.startsWith("EUDBD701")) {
+    // return new Attr[] { new Attr("Entity", "CIB"), new Attr("Country", "Belgium")
+    // };
+    // }
+
+    // return new Attr[] { new Attr("Entity", "CashMgt"), new Attr("Country",
+    // "France") };
+
+    // }
 
     @Override
     public void close() {

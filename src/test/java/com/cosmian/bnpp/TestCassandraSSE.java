@@ -8,8 +8,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
+import java.util.logging.Level;
 
 import com.cosmian.CosmianException;
+import com.cosmian.cloudproof_demo.App;
 import com.cosmian.cloudproof_demo.DseDB;
 import com.cosmian.cloudproof_demo.sse.Sse;
 import com.cosmian.cloudproof_demo.sse.Sse.DbUid;
@@ -23,7 +25,8 @@ public class TestCassandraSSE {
 
 	@BeforeAll
 	public static void before_all() {
-		TestUtils.initLogging();
+		App.configureLog4j();
+		App.initLogging(Level.INFO);
 	}
 
 	@Test

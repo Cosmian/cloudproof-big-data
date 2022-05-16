@@ -27,12 +27,16 @@ import org.apache.commons.cli.ParseException;
 public class App {
 
     public static void main(String[] args) throws AppException {
-
         // This is due to the HDFS connector. Nothing else below uses Log4j
         configureLog4j();
 
         // init Java logging
         initLogging(Level.INFO);
+
+        run(args);
+    }
+
+    public static void run(String[] args) throws AppException {
 
         Options cliOptions = App.cliOptions();
         CommandLine cli;
@@ -43,14 +47,26 @@ public class App {
             return;
         }
 
-        String clearTextFilename = "clear.txt";
-        if (cli.hasOption("clear-text-filename")) {
-            clearTextFilename = cli.getOptionValue("clear-text-filename");
-        }
-
         String outputDirString = null;
         if (cli.hasOption("output-dir")) {
             outputDirString = cli.getOptionValue("output-dir");
+        }
+
+        if (cli.hasOption("generate-keys")) {
+            if (outputDirString == null) {
+                throw new AppException("The output directory must be specified for key generation");
+            }
+            try {
+                new KeyGenerator(outputDirString).generateKeys();
+            } catch (CosmianException e) {
+                throw new AppException("Key Generation failed: " + e.getMessage(), e);
+            }
+            return;
+        }
+
+        String clearTextFilename = "clear.txt";
+        if (cli.hasOption("clear-text-filename")) {
+            clearTextFilename = cli.getOptionValue("clear-text-filename");
         }
 
         String dseIP = "127.0.0.1";
@@ -82,26 +98,14 @@ public class App {
             keyString = cli.getOptionValue("key");
         }
         Path abeKey = Paths.get(keyString);
-        // not necessary to check for key generation
-        if (!cli.hasOption("generate-keys")) {
-            if (!Files.exists(abeKey)) {
-                throw new AppException("The key file: " + keyString + " does not exists");
-            }
-            if (Files.isDirectory(abeKey)) {
-                throw new AppException("The key file: " + keyString + " is a directory");
-            }
-            if (!Files.isReadable(abeKey)) {
-                throw new AppException("The key file: " + keyString + " is not readable");
-            }
+        if (!Files.exists(abeKey)) {
+            throw new AppException("The key file: " + keyString + " does not exists");
         }
-
-        if (cli.hasOption("generate-keys")) {
-            try {
-                new KeyGenerator(outputDirString).generateKeys();
-            } catch (CosmianException e) {
-                throw new AppException("Key Generation failed: " + e.getMessage(), e);
-            }
-            return;
+        if (Files.isDirectory(abeKey)) {
+            throw new AppException("The key file: " + keyString + " is a directory");
+        }
+        if (!Files.isReadable(abeKey)) {
+            throw new AppException("The key file: " + keyString + " is not readable");
         }
 
         if (cli.hasOption("encrypt")) {
@@ -179,7 +183,7 @@ public class App {
             }
             Set<Word> words = new HashSet<>();
             for (int i = 1; i < argsList.size(); i++) {
-                words.add(new Word(argsList.get(i).getBytes(StandardCharsets.UTF_8)));
+                words.add(new Word(argsList.get(i).toLowerCase().getBytes(StandardCharsets.UTF_8)));
             }
             try (Search search = new Search(abeKey, dseConf, fsRootUri)) {
                 search.run(words, outputDirString, clearTextFilename);

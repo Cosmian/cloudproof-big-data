@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.PrivilegedExceptionAction;
 import java.util.Iterator;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.cosmian.cloudproof_demo.App;
@@ -32,7 +33,9 @@ public class HDFSTest {
 
     @BeforeAll
     public static void before_all() {
-        TestUtils.initLogging();
+        App.configureLog4j();
+        App.initLogging(Level.INFO);
+
     }
 
     @Test

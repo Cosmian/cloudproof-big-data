@@ -20,7 +20,7 @@ Decryption of authorized transaction from HDFS using a private key with access p
     - [Building](#building)
     - [abe-gpsw](#abe-gpsw)
     - [cosmian_java_lib](#cosmian_java_lib)
-    - [main program: bnpp_cosmian](#main-program-bnpp_cosmian)
+    - [main program: cloudproof-demo](#main-program-cloudproof-demo)
   - [Setting up a test hadoop environment](#setting-up-a-test-hadoop-environment)
     - [Listing Hadoop files](#listing-hadoop-files)
   - [Setting up Cassandra DSE](#setting-up-cassandra-dse)
@@ -52,25 +52,30 @@ graph LR
 **input/output file**
 
 ```text
-{"payload":{"paymentFlowChainReferences":{"exc...
-{"payload":{"paymentFlowChainReferences":{"exc...
-{"payload":{"paymentFlowChainReferences":{"exc...
-...
-{"payload":{"paymentFlowChainReferences":{"exc...
-{"payload":{"paymentFlowChainReferences":{"exc...
+{"firstName": "Felix","lastName": "Caparelli","phone": "06 52 23 63 25","email": "orci@icloud.fr","country": "France","region": "Corsica","employeeNumber": "SPN82TTO0PP","security": "confidential"}
+{"firstName": "Emerson","lastName": "Wilkins","phone": "01 01 31 41 37","email": "enim.diam@icloud.edu","country": "Spain","region": "Antofagasta","employeeNumber": "BYE60HQT6XG","security": "confidential"}
+{"firstName": "Ocean","lastName": "Meyers","phone": "07 45 55 66 55","email": "ultrices.vivamus@aol.net","country": "Spain","region": "Podlaskie","employeeNumber": "SXK82FCR9EP","security": "confidential"}
+{"firstName": "Kiara","lastName": "Harper","phone": "07 17 88 69 58","email": "vitae@outlook.com","country": "Germany","region": "Rajasthan","employeeNumber": "CWN36QTX2BN","security": "secret"}
+{"firstName": "Joelle","lastName": "Becker","phone": "01 11 46 84 14","email": "felis.adipiscing@hotmail.org","country": "France","region": "İzmir","employeeNumber": "AFR04EPJ1YM","security": "secret"}
+{"firstName": "Stacy","lastName": "Reyes","phone": "03 53 66 40 67","email": "risus.a@yahoo.ca","country": "France","region": "Nord-Pas-de-Calais","employeeNumber": "ZVW02EAM3ZC","security": "secret"}
 
 ```
 
 #### Indexing using Symmetric Searchable Encryption
 
- - Indexing direction value from `payload.businessPaymentInformation.pmtBizCntxt.drctn.ITRId`, can be `IN` or `OUT`
- - Extract first 2 characters frm IBAN from, if direction is 
-    - `IN`: `payload.businessPaymentInformation.cdtr.cdtrAcct`
-    - `OUT`: `payload.businessPaymentInformation.dbtr.dbtrAcct`
+Five indexes are created on the following patterns:
 
+ - firstName
+ - lastName
+ - "first="+firstName
+ - "last="+lastName
+ - "country="+country
+
+All values are converted to lower case before indexing
 Values are indexed in a DSE Cassandra database 5.1.20. Everything is encrypted in the DB.
 
-Values `IN` and `OUT` do not clash with the IBAN first 2 characters, but if this were the case we could index `DIR=IN` and ` DIR=OUT` instead.
+A search for "Douglas" will retrieve all the Douglas, first name or last name
+A search for "first=Douglas" will only retrieve the Douglas used as a first name
 
 #### Attributes Based Encryption
 
@@ -82,62 +87,36 @@ Values `IN` and `OUT` do not clash with the IBAN first 2 characters, but if this
 
 Two non hierarchical axes:
 
-- `Entity`: `{ BCEF, BNPPF, CIB, CashMgt }`
-- `Country`: `{ France, Germany, Italy, Hungary, Spain, Belgium }`
+- `country`: `{ France, Germany, Spain }`
+- `department`: `{ marketing, HR, security }`
 
-### Policy Attributes
+The `country` axis partitions the rows of the database (on the value of the `country` value), while the `department` axis partitions the columns.
 
-Policy attributes are determined based on the first part of the content of the field `header.functional.currentEventProducer.processId`
+The `firstName`, `lastName` and `country` columns are visible for any user with a valid key.
+The `email`, `region` and`phone` columns are only visible to a user who has a `department::marketing` attribute in its key access policy.
+The `employeeNumber` column is only visible to a user who has a `department::HR` attribute in its key access policy.
+The `security` column is only visible to the super admin.
 
-```json
-{
-    "payload": {
-        ...
-    },
-    "header": {
-        "functional": {
-            ...
-            "currentEventProducer": {
-                "processId": "EUDBD701/EUBD08",
-                "processType": {
-                    "OEId": "CurProgram"
-                },
-                "stageId": "DebitBooking"
-            },
-            ...
-        ...
-        }
-    }
 
-```
-
-ProcessId  |  Attributes
------------|--------------------------------
-EUDBD101   | Entity::BNPPF, Country::France
-EUDBD501   | Entity::BNPPF, Country::Italy
-EUDBD601   | Entity::BCEF, Country::France
-EUDBD701   | Entity::CIB, Country::Belgium
-*          | Entity::CashMgt, Country::France
+![paritions](./policy.png)
 
 
 ### User Keys
 
-User Decryption Keys with various access policies have been pre-generated
+User Decryption Keys with various access policies have been pre-generated in `src/test/resources/keys/`
 
 Key                          | Access Policy
 -----------------------------|---------------------------------------------------------
-user_BCEF_FRANCE_key.json    | `Entity::BCEF & Country::France`
-user_BNPPF_France_key.json   | `Entity::BNPPF & Country::France`
-user_BNPPF_Italy_key.json    | `Entity::BNPPF & Country::Italy`
-user_CIB_Belgium_key.json    | `Entity::CIB & Country::Belgium`
-user_BNPPF_ALL_key.json      | `Entity::BNPF & Country::*`
-user_ALL_France_key.json     | `Entity::* & Country::France`
-user_ALL_ALL_key.json        | `Entity::* & Country::*`  *<- super user*
+user_Alice_key.json          | `country::France & department::marketing`
+user_Bob_key.json            | `country::Spain & department::HR`
+user_Charlie_key.json        | `country::France & department::HR`
+user_SuperAdmin_key.json     | `country::* & department::*`
+user_Mallory_key.json        | `country::Other & department::other`
 
 
 Access policies are boolean expressions of the form:
 ```
-(Entity::BNPPF | Entity::BCEF) & (Country::France | Country::Italy)`
+(department::marketing | department::HR) & (country::France | country::Spain)`
 ```
 
 When policy attributes of a transaction make the expression `true`, the transaction can be decrypted.
@@ -176,7 +155,7 @@ usage: usage: app SUB-COMMAND [OPTIONS] [SOURCE URI] [WORD1, WORD2,...]
                                        server. Defaults to NULL
  -e,--encrypt                          encrypt the supplied files and
                                        directories URI(s)
- -g,--generate-keys                    generate all the keys
+ -g,--generate-keys                    generate all the keys (needs a KMS access)
  -k,--key <FILE>                       the path to the key file: defaults
                                        to key.json
  -o,--output-dir <URI>                 the path of the output directory.
@@ -190,103 +169,85 @@ usage: usage: app SUB-COMMAND [OPTIONS] [SOURCE URI] [WORD1, WORD2,...]
 
 This shows example using the Hadoop test environment set-up below
 
-Replace the `hdfs:` scheme with `hdfso:` in the URIs below if you wish to use 
-the HDFS connector without kerberos authentication (for example when using the 2.7.5 hadoop docker below)
+Replace the `hdfso:` scheme with `hdfs:` in the URIs below if you wish to use 
+the HDFS connector with kerberos authentication (the 2.7.5 hadoop docker below does NOT use Kerberos)
 
 #### Encrypting
 
-Encrypt 1408 records read from `.src/test/resources/pesddcosmian.txt` and write the 100 files to HDFS at `"hdfs://root@localhost:9000/user/root/"`
+Encrypt 100 records read from `.src/test/resources/users.txt` and write the 100 files to HDFS at `"hdfs://root@localhost:9000/user/root/"`
 
 ```bash
 java -jar target/cloudproof-demo-1.0.0.jar --encrypt \
     -k src/test/resources/keys/public_key.json \
-    -o "hdfs://root@localhost:9000/user/root/" \
-    src/test/resources/pesddcosmian.txt
+    -o "hdfso://root@localhost:9000/user/root/" \
+    src/test/resources/users.txt
 ```
 
 #### Searching
 
-All sample records have an OUT direction, so this will find them all in `"hdfs://root@localhost:9000/user/root/"` with the `ALL_ALL` super user key
+Alice can read the Marketing part of all users in France
 
 ```bash
 java -jar target/cloudproof-demo-1.0.0.jar --search \
-    -k src/test/resources/keys/user_ALL_ALL_key.json \
+    -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
-    -c search_OUT_ALL_ALL.txt \
-    "hdfs://root@localhost:9000/user/root/" \
-    "OUT"
+    -c search_Alice.txt \
+    "hdfso://root@localhost:9000/user/root/" \
+    "country=France"
 ```
 
-There are 2 records for 'DE'....
-
-```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
-    -k src/test/resources/keys/user_ALL_ALL_key.json \
-    -o src/test/resources/dec/ \
-    -c search_DE_ALL_ALL.txt \
-    "hdfs://root@localhost:9000/user/root/" \
-    "DE"
+```
+{"firstName":"Skyler","lastName":"Richmond","country":"France","phone":"Figueroa","region":"Chiapas","email":"elit@google.net"}
+{"firstName":"MacKensie","lastName":"Atkinson","country":"France","phone":"08 03 38 16 24","region":"Sachsen","email":"integer.eu@google.org"}
+{"firstName":"Felix","lastName":"Robert","country":"France","phone":"03 37 88 63 83","region":"Aquitaine","email":"dolor.sit@hotmail.fr"}
+... 
+(31 total)
 ```
 
-.... but only one can be decrypted using the `BNPPF_France` key
+
+... but no user outside of France
 
 ```bash
 java -jar target/cloudproof-demo-1.0.0.jar --search \
-    -k src/test/resources/keys/user_BNPPF_France_key.json \
+    -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
-    -c search_DE_BNPPF_France.txt \
-    "hdfs://root@localhost:9000/user/root/" \
-    "DE"
+    -c search_Alice.txt \
+    "hdfso://root@localhost:9000/user/root/" \
+    "country=Spain"
 ```
 
-The current strategy implements `OR` but ` ANDè (disjunction) could easily be implemented
+As expected the Super ADmin can find users in all countries and view all details
+
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
-    -k src/test/resources/keys/user_ALL_ALL_key.json \
-    -o src/test/resources/dec/ \
-    -c search_DE_NL_ALL_ALL.txt \
-    "hdfs://root@localhost:9000/user/root/" \
-    "DE" "NL"
+java -jar target/cloudproof-demo-1.0.0.jar --search \ 
+    -k src/test/resources/keys/user_SuperAdmin_key.json \
+    -o src/test/resources/dec/ \                 
+    -c search_SuperADmin.txt \  
+    "hdfso://root@localhost:9000/user/root/" \
+    "Douglas"
+```
+
+```
+{"firstName":"Kalia","lastName":"Douglas","country":"France","security":"top_secret","phone":"03 56 82 77 04","region":"Tripura","email":"mus.proin@hotmail.net","employeeNumber":"AHM27UPN3HD"}
+{"firstName":"Xander","lastName":"Douglas","country":"France","security":"top_secret","phone":"08 22 77 36 03","region":"Ile de France","email":"arcu.sed@protonmail.couk","employeeNumber":"DIY45MVM4TV"}
+{"firstName":"Douglas","lastName":"Jones","country":"Spain","security":"confidential","phone":"02 91 58 51 74","region":"Kahramanmaraş","email":"djones@yahoo.com","employeeNumber":"JCO88AVA2LH"}
+
 ```
 
 
 #### Direct Decryption
 
 It is also possible to attempt to directly decrypt all records (i.e. without doing a search)
-
-Decrypt records in `"hdfs://root@localhost:9000/user/root/"` with the BNPPF_France user key and create a file `src/test/resources/dec/BNPPF_France.txt`
-
-```bash
-java -jar target/cloudproof-demo-1.0.0.jar --decrypt \
-    -k src/test/resources/keys/user_BNPPF_France_key.json \
-    -o src/test/resources/dec/ \
-    -c BNPPF_France.txt \
-    "hdfs://root@localhost:9000/user/root/"
-```
-
-Decrypt records in `"hdfs://root@localhost:9000/user/root/"` with the BNPPF_ALL user key and create a file `src/test/resources/dec/BNPPF_ALL.txt`
-
+`
 
 ```bash
 java -jar target/cloudproof-demo-1.0.0.jar --decrypt \
-    -k src/test/resources/keys/user_BNPPF_ALL_key.json \
+    -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
-    -c BNPPF_ALL.txt \
-    "hdfs://root@localhost:9000/user/root/"
+    -c direct_Alice.txt \
+    "hdfso://root@localhost:9000/user/root/"
 ```
-
-Decrypt records in `"hdfs://root@localhost:9000/user/root/"` with the ALL_ALL super user key and create a file `src/test/resources/dec/ALL_ALL.txt`
-
-
-```bash
-java -jar target/cloudproof-demo-1.0.0.jar --decrypt \
-    -k src/test/resources/keys/user_ALL_ALL_key.json \
-    -o src/test/resources/dec/ \
-    -c ALL_ALL.txt \
-    "hdfs://root@localhost:9000/user/root/"
-```
-
 
 
 ### Building
@@ -321,7 +282,7 @@ A pre-built linux version of the abe_gpsw library is already available in the `s
     ```
     cargo build --release --all-features
     ```
-5. Copy the dynamic library in `target/release` subdirectory (called `libabe_gpsw.so` on Linux) to this `bnpp_cosmian` project
+5. Copy the dynamic library in `target/release` subdirectory (called `libabe_gpsw.so` on Linux) to this `cloudproof-demo` project
 
     - `src/main/resources/linux-x86-64` folder for a Linux Intel machine
     - `src/main/resources/linux-amd64` folder for a Linux AMD machine
@@ -405,7 +366,7 @@ If for security reasons, you still wish to do so,follow the steps below:
     mvn install -Dmaven.test.skip
     ```
 
-### main program: bnpp_cosmian
+### main program: cloudproof-demo
 
 1. Compile and package the program. From the root directory
 

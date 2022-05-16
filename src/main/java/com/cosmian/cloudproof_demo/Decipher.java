@@ -1,12 +1,13 @@
 package com.cosmian.cloudproof_demo;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -21,6 +22,8 @@ import com.cosmian.jna.Ffi;
 import com.cosmian.jna.FfiException;
 import com.cosmian.jna.abe.DecryptedHeader;
 import com.cosmian.rest.kmip.objects.PrivateKey;
+
+import org.json.JSONObject;
 
 public class Decipher implements AutoCloseable {
 
@@ -135,12 +138,63 @@ public class Decipher implements AutoCloseable {
     byte[] decryptResource(byte[] uid, byte[] encryptedBytes)
             throws AppException {
 
-        // Header length
-        // byte[] beBytes = Arrays.copyOfRange(encryptedBytes, 0, 4);
-        int headerSize = ByteBuffer.wrap(encryptedBytes).order(ByteOrder.BIG_ENDIAN).getInt(0);
+        ByteArrayInputStream bai = new ByteArrayInputStream(encryptedBytes);
+
+        try {
+            // decrypt the common part
+            byte[] commonPart = decryptPart(uid, bai);
+            JSONObject json = new JSONObject(new String(commonPart, StandardCharsets.UTF_8));
+
+            // try decrypting the marketing part
+            try {
+                byte[] mkgPart = decryptPart(uid, bai);
+                JSONObject mkgJson = new JSONObject(new String(mkgPart, StandardCharsets.UTF_8));
+                mkgJson.keys().forEachRemaining(k -> json.put(k, mkgJson.getString(k)));
+            } catch (AppException e) {
+                // no right ignore
+                logger.finer(() -> " ... skipping the marketing part");
+            }
+
+            // try decrypting the HR part
+            try {
+                byte[] hrPart = decryptPart(uid, bai);
+                JSONObject hrJson = new JSONObject(new String(hrPart, StandardCharsets.UTF_8));
+                hrJson.keys().forEachRemaining(k -> json.put(k, hrJson.getString(k)));
+            } catch (AppException e) {
+                // no right ignore
+                logger.finer(() -> " ... skipping the HR part");
+            }
+
+            // try decrypting the security part
+            try {
+                byte[] securityPart = decryptPart(uid, bai);
+                JSONObject securityJson = new JSONObject(new String(securityPart, StandardCharsets.UTF_8));
+                securityJson.keys().forEachRemaining(k -> json.put(k, securityJson.getString(k)));
+            } catch (AppException e) {
+                // no right ignore
+                logger.finer(() -> " ... skipping the Security part");
+            }
+
+            return json.toString().getBytes(StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new AppException("Unexpected exception decrypting a part: " + e.getMessage(), e);
+        }
+
+    }
+
+    /**
+     * Decrypt a part
+     */
+    byte[] decryptPart(byte[] uid, ByteArrayInputStream bai)
+            throws AppException, IOException {
+
+        byte[] headerBuffer = new byte[4];
+        bai.read(headerBuffer, 0, 4);
+        int headerSize = ByteBuffer.wrap(headerBuffer).order(ByteOrder.BIG_ENDIAN).getInt(0);
 
         // Encrypted header
-        byte[] encryptedHeader = Arrays.copyOfRange(encryptedBytes, 4, 4 + headerSize);
+        byte[] encryptedHeader = new byte[headerSize];
+        bai.read(encryptedHeader, 0, headerSize);
         DecryptedHeader decryptedHeader;
         try {
             decryptedHeader = Ffi.decryptHeaderUsingCache(this.decryptionCache, encryptedHeader);
@@ -148,7 +202,12 @@ public class Decipher implements AutoCloseable {
             throw new AppException("failed to decrypt the header: " + e.getMessage(), e);
         }
 
-        byte[] encryptedContent = Arrays.copyOfRange(encryptedBytes, 4 + headerSize, encryptedBytes.length);
+        byte[] blockBuffer = new byte[4];
+        bai.read(blockBuffer, 0, 4);
+        int blockSize = ByteBuffer.wrap(blockBuffer).order(ByteOrder.BIG_ENDIAN).getInt(0);
+
+        byte[] encryptedContent = new byte[blockSize];
+        bai.read(encryptedContent, 0, blockSize);
         try {
             return Ffi.decryptBlock(decryptedHeader.getSymmetricKey(), uid, 0, encryptedContent);
         } catch (FfiException e) {
