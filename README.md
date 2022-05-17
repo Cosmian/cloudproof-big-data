@@ -1,46 +1,27 @@
 # Cloudproof-java-demo
-## Cloudproof encryption: encryption and secure search of large (Big Data) repository in the cloud
+## Cloudproof encryption: encryption and secure search of large (Big Data) repositories in the cloud
+
+Cloudproof provides encryption so that large repositories of data, and indexes 
+ - can be safely stored encrypted and partitioned in the cloud then
+ - quickly and confidentially searched using encrypted indexes and queries
+ 
+ Users can only decrypted data from partitions matching the access policy of their keys.
+
+ At no time does the cloud learn anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
 
 See the [documentation](https://docs.cosmian.com/cloudproof_encryption/use_cases_benefits/) for benefits, uses cases and technological details.
 
-Encrypted indexing and encryption of records to HDFS using a public key and policy attributes.
+This demo shows: 
 
-Encrypted search and decryption of authorized transaction from HDFS using a private key that holds an access policy.
+ - encrypted indexing and encryption of records to a Hadoop Distributed File System (HDFS) using a public key and policy attributes.
+ - encrypted search and decryption of authorized transaction from HDFS using a private key that holds an access policy.
 
-All data encrypted with Policy attributes are stored on a cloud type system, a Hadoop Distributed File System in this demo.
-
-Encrypted indexes are stored in a cloud-type key-value store, Cassandra in this demo.
-
-At no time the cloud learns anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
+Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in this demo.
 
 
 
-  - [Cloudproof encryption: large (Big Data) repository encrypted indexing and encrypted partitions with attributes](#cloudproof-encryption-large-big-data-repository-encrypted-indexing-and-encrypted-partitions-with-attributes)
-    - [Flow Overview](#flow-overview)
-      - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
-      - [Attributes Based Encryption](#attributes-based-encryption)
-    - [Policy](#policy)
-    - [User Keys](#user-keys)
-  - [Software](#software)
-    - [Example Usage](#example-usage)
-      - [Encrypting](#encrypting)
-      - [Searching](#searching)
-      - [Direct Decryption](#direct-decryption)
-    - [Building](#building)
-    - [abe-gpsw](#abe-gpsw)
-      - [Building abe-gpsw for a different glibc](#building-abe-gpsw-for-a-different-glibc)
-    - [cosmian_java_lib](#cosmian_java_lib)
-    - [main program: cloudproof-demo](#main-program-cloudproof-demo)
-  - [Setting up a test hadoop environment](#setting-up-a-test-hadoop-environment)
-    - [Listing Hadoop files](#listing-hadoop-files)
-  - [Setting up Cassandra DSE](#setting-up-cassandra-dse)
-    - [Running locally](#running-locally)
-  - [Deploying via zip](#deploying-via-zip)
 
-<!-- /code_chunk_output -->
-
-
-### Flow Overview
+## Flow Overview
 
 Upserting
 ```mermaid
@@ -99,7 +80,7 @@ Each transaction/line is considered unique and becomes a file in HDFS with name 
 
  - Dec: decryption with an user private key of authorised records collected in a clear text file. The access policy of the key determines which records can be decrypted.
 
-### Policy
+## Policy
 
 Two non hierarchical axes:
 
@@ -120,7 +101,7 @@ The `security` column is only visible to the super admin.
 ![paritions](./policy.png)
 
 
-### User Keys
+## User Keys
 
 User Decryption Keys with various access policies have been pre-generated in `src/test/resources/keys/`
 
@@ -293,11 +274,32 @@ java -jar target/cloudproof-demo-1.0.0.jar --decrypt \
 
 First, clone this directory locally. A working version of the Java 8 compiler must be available.
 
-The software is linked to 2 separate open-source libraries made by Cosmian. For maximum security and compatibility, these librairies should be built on the target system.
+The software is linked to 2 separate open-source libraries made by Cosmian. For maximum security and compatibility, these librairies should be built on the target system, however it should not be necessary to rebuild them to build and run this demo.
 
  - [abe_gpsw](https://github.com/Cosmian/abe_gpsw): a native library developed in Rust that implements the ABE+AES hybrid cryptography.
 
  - [cosmian_java_lib](https://github.com/Cosmian/cosmian_java_lib): the main Cosmian Java Library that exposes the Cosmian APIs and calls the ABE native library
+
+
+### main program: cloudproof-demo
+
+1. Compile and package the program. From the root directory
+
+    ```
+    mvn clean package -Dmaven.test.skip
+    ```
+
+2. Pull the dependencies locally in `target/dependency` directory
+
+    ```
+    mvn dependency:copy-dependencies
+    ```
+
+3. Print the help to check everything is fine
+
+    ```
+    java -jar target/cloudproof-demo-1.0.0.jar
+    ```
 
 
 ### abe-gpsw
@@ -405,28 +407,9 @@ If for security reasons, you still wish to do so,follow the steps below:
     mvn install -Dmaven.test.skip
     ```
 
-### main program: cloudproof-demo
-
-1. Compile and package the program. From the root directory
-
-    ```
-    mvn clean package -Dmaven.test.skip
-    ```
-
-2. Pull the dependencies locally in `target/dependency` directory
-
-    ```
-    mvn dependency:copy-dependencies
-    ```
-
-3. Print the help to check everything is fine
-
-    ```
-    java -jar target/cloudproof-demo-1.0.0.jar
-    ```
 
 
-## Setting up a test hadoop environment
+### Setting up a test hadoop environment
 
 This uses a docker version of hadoop 2.7.5 and makes it available to the `root` user at:
 
@@ -462,7 +445,7 @@ zejnils/hadoop-docker
 docker stop hadoop-2.7.5
 ```
 
-### Listing Hadoop files
+#### Listing Hadoop files
 
 Run the command inside the docker container:
 
@@ -475,20 +458,20 @@ sudo docker exec hadoop-2.7.5 /bin/bash -c "/usr/local/hadoop-2.7.5/bin/hadoop f
 sudo docker exec hadoop-2.7.5 /bin/bash -c "/usr/local/hadoop-2.7.5/bin/hadoop fs -count ."
 ```
 
-## Setting up Cassandra DSE
+### Setting up Cassandra DSE
 
 - version 5.1.20:  `docker pull datastax/dse-server:5.1.20`
 - driver: https://docs.datastax.com/en/developer/java-driver/4.13/
 
-### Running locally
+#### Running locally
 
 ```bash
 sudo docker run -e DS_LICENSE=accept --network host --name dse_5.1.20 -d datastax/dse-server:5.1.20
 ```
 
-## Deploying via zip
+### Building a zip of this demo
 
-Clean up the target folder, re-build then zip without .git files
+To build a zip, clean up the target folder, re-build following the instructions above then zip without .git files
 
 ```sh
 rm -rf target
