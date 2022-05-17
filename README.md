@@ -115,9 +115,9 @@ The `country` axis partitions the rows of the database (on the value of the `cou
 
 The `firstName`, `lastName` and `country` columns are visible for any user with a valid key.
 
-The `email`, `region` and`phone` columns are only visible to a user who has a `department::marketing` attribute in its key access policy.
+The `region` column is only visible to a user who has a `department::marketing` attribute in its key access policy.
 
-The `employeeNumber` column is only visible to a user who has a `department::HR` attribute in its key access policy.
+The `email`, `phone`, `employeeNumber` columns are only visible to a user who has a `department::HR` attribute in its key access policy.
 
 The `security` column is only visible to the super admin.
 

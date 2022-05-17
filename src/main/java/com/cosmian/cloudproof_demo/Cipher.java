@@ -200,8 +200,6 @@ public class Cipher implements AutoCloseable {
                 Attr[] mkg_attributes = new Attr[] { country_attribute, new Attr("department", "marketing") };
                 // we want all but employeeNumber and security
                 JSONObject mkg_json = new JSONObject();
-                mkg_json.put("phone", json.getString("phone"));
-                mkg_json.put("email", json.getString("email"));
                 mkg_json.put("region", json.getString("region"));
                 // json.keySet().stream()
                 // .filter(k -> !(k.equals("employeeNumber") || k.equals("security")))
@@ -212,6 +210,8 @@ public class Cipher implements AutoCloseable {
                 // HR part of the file
                 Attr[] hr_attributes = new Attr[] { country_attribute, new Attr("department", "HR") }; // marketing
                 JSONObject hr_json = new JSONObject();
+                hr_json.put("phone", json.getString("phone"));
+                hr_json.put("email", json.getString("email"));
                 hr_json.put("employeeNumber", json.getString("employeeNumber"));
                 totalTime += encryptPart(bao, cache, hr_attributes, hash,
                         hr_json.toString().getBytes(StandardCharsets.UTF_8));
