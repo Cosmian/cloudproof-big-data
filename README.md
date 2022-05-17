@@ -5,11 +5,11 @@ Cloudproof provides encryption so that large repositories of data, and indexes
  - can be safely stored encrypted and partitioned in the cloud then
  - quickly and confidentially searched using encrypted indexes and queries
  
- Users can only decrypted data from partitions matching the access policy of their keys.
+Users can only decrypt data from partitions matching the access policy of their keys.
 
- At no time does the cloud learn anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
+At no time does the cloud learn anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
 
-See the [documentation](https://docs.cosmian.com/cloudproof_encryption/use_cases_benefits/) for benefits, uses cases and technological details.
+See the [documentation](https://docs.cosmian.com/cloudproof_encryption/use_cases_benefits/) for benefits, uses cases and technology details.
 
 This demo shows: 
 
@@ -21,14 +21,38 @@ Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in t
 
 
 
+  - [Cloudproof encryption: encryption and secure search of large (Big Data) repositories in the cloud](#cloudproof-encryption-encryption-and-secure-search-of-large-big-data-repositories-in-the-cloud)
+  - [Flow Overview](#flow-overview)
+      - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
+      - [Attributes Based Encryption](#attributes-based-encryption)
+  - [Policy](#policy)
+  - [User Keys](#user-keys)
+  - [Software](#software)
+    - [Example Usage](#example-usage)
+      - [Encrypting](#encrypting)
+      - [Searching](#searching)
+      - [Direct Decryption](#direct-decryption)
+    - [Building](#building)
+    - [main program: cloudproof-demo](#main-program-cloudproof-demo)
+    - [abe-gpsw](#abe-gpsw)
+      - [Building abe-gpsw for a different glibc](#building-abe-gpsw-for-a-different-glibc)
+    - [cosmian_java_lib](#cosmian_java_lib)
+    - [Setting up a test hadoop environment](#setting-up-a-test-hadoop-environment)
+      - [Listing Hadoop files](#listing-hadoop-files)
+    - [Setting up Cassandra DSE](#setting-up-cassandra-dse)
+      - [Running locally](#running-locally)
+    - [Building a zip of this demo](#building-a-zip-of-this-demo)
+
+ 
+
 ## Flow Overview
 
 Upserting
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
 graph LR
-    File[[File]] -- Index --> DSE[(DSE)]
-    File[[File]] -- Enc --> HDFS[(HDFS)]
+    File[[File]] -- index --> DSE[(DSE)]
+    File[[File]] -- encrypt --> HDFS[(HDFS)]
 ```
 
 Searching
@@ -36,9 +60,9 @@ Searching
 %%{init: {'theme': 'neutral'}}%%
 graph LR
     User  -- 1. search --> DSE
-    DSE -- dec --> User
+    DSE -- decrypt --> User
     User -- 2. retrieve --> HDFS[(HDFS)]
-    HDFS -- dec --> User
+    HDFS -- decrypt --> User
 ```
 
 
@@ -259,7 +283,6 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 #### Direct Decryption
 
 It is also possible to attempt to directly decrypt all records (i.e. without doing a search)
-`
 
 ```bash
 java -jar target/cloudproof-demo-1.0.0.jar --decrypt \
