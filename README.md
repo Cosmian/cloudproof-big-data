@@ -240,10 +240,10 @@ As expected the Super Admin can find users in all countries and view all details
 
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \ 
+java -jar target/cloudproof-demo-1.0.0.jar --search \
     -k src/test/resources/keys/user_SuperAdmin_key.json \
-    -o src/test/resources/dec/ \                 
-    -c search_SuperADmin.txt \  
+    -o src/test/resources/dec/ \
+    -c search_SuperADmin.txt \
     "hdfso://root@localhost:9000/user/root/" \
     "Douglas"
 ```
