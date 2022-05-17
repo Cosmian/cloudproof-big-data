@@ -143,7 +143,7 @@ Access policies are boolean expressions of the form:
 (department::marketing | department::HR) & (country::France | country::Spain)`
 ```
 
-When policy attributes of a transaction make the expression `true`, the transaction can be decrypted.
+When policy attributes of a record make the expression `true`, the record can be decrypted.
 
 ## Software
 
@@ -209,7 +209,7 @@ java -jar target/cloudproof-demo-1.0.0.jar --encrypt \
 
 #### Searching
 
-Alice can read the Marketing part of all users in France
+Alice can read the Marketing part (the region) of all users in France
 
 ```bash
 java -jar target/cloudproof-demo-1.0.0.jar --search \
@@ -241,7 +241,7 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
     "country=Spain"
 ```
 
-Bob can read the employee number part of all users in Spain, but not their marketing part
+Bob can read the email, phone and employee number part of all users in Spain, but not their marketing part (the region)
 
 ```bash
 java -jar target/cloudproof-demo-1.0.0.jar --search \
@@ -281,7 +281,7 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 
 ```
 
-Please note that this query retrieved first name or last name is 'Douglas'.
+Please note that this query retrieved first name or last name is equal to 'Douglas'.
 
 
 #### Direct Decryption
