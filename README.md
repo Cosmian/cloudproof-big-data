@@ -221,9 +221,10 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 ```
 
 ```
-{"firstName":"Skyler","lastName":"Richmond","country":"France","phone":"Figueroa","region":"Chiapas","email":"elit@google.net"}
-{"firstName":"MacKensie","lastName":"Atkinson","country":"France","phone":"08 03 38 16 24","region":"Sachsen","email":"integer.eu@google.org"}
-{"firstName":"Felix","lastName":"Robert","country":"France","phone":"03 37 88 63 83","region":"Aquitaine","email":"dolor.sit@hotmail.fr"}
+{"firstName":"Skyler","lastName":"Richmond","country":"France","region":"Chiapas"}
+{"firstName":"MacKensie","lastName":"Atkinson","country":"France","region":"Sachsen"}
+{"firstName":"Felix","lastName":"Robert","country":"France","region":"Aquitaine"}
+{"firstName":"Wylie","lastName":"Snider","country":"France","region":"Kansas"}
 ... 
 (31 total)
 ```
@@ -252,10 +253,11 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 ```
 
 ```
-{"firstName":"Gavin","lastName":"Bailey","country":"Spain","employeeNumber":"NVH67DKP6FV"}
-{"firstName":"Jerry","lastName":"Gonzales","country":"Spain","employeeNumber":"RBU57EWQ8MI"}
-{"firstName":"Felix","lastName":"Garcia","country":"Spain","employeeNumber":"EQN94VSX2IJ"}
-{"firstName":"Wang","lastName":"Chan","country":"Spain","employeeNumber":"VYY77VOW0QR"}
+{"firstName":"Gavin","lastName":"Bailey","country":"Spain","phone":"08 25 25 31 93","email":"dui.in.sodales@protonmail.net","employeeNumber":"NVH67DKP6FV"}
+{"firstName":"Jerry","lastName":"Gonzales","country":"Spain","phone":"07 24 80 13 06","email":"convallis.convallis@aol.org","employeeNumber":"RBU57EWQ8MI"}
+{"firstName":"Wang","lastName":"Chan","country":"Spain","phone":"07 13 38 17 82","email":"venenatis.vel@outlook.net","employeeNumber":"VYY77VOW0QR"}
+{"firstName":"Felix","lastName":"Garcia","country":"Spain","phone":"08 26 78 84 71","email":"pede.sagittis@aol.es","employeeNumber":"EQN94VSX2IJ"}
+...
 ...
 ```
 
@@ -278,6 +280,8 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 {"firstName":"Douglas","lastName":"Jones","country":"Spain","security":"confidential","phone":"02 91 58 51 74","region":"Kahramanmaraş","email":"djones@yahoo.com","employeeNumber":"JCO88AVA2LH"}
 
 ```
+
+Please note that this query retrieved first name or last name is 'Douglas'.
 
 
 #### Direct Decryption
