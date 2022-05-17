@@ -147,14 +147,14 @@ When policy attributes of a transaction make the expression `true`, the transact
 
 ## Software
 
-Java standalone program that performs injection with encryption to HDFS and extraction with decryption from HDFS.
+Java standalone program that performs injection with encryption to HDFS and indexing to Cassandra and secure querying to Cassandra extraction with decryption from HDFS.
 
-Fot instructions on how to build the software, see the build section at the end.
+Fot instructions on how to build the software, see the [building](#building) section at the end.
 
-Three sub-commands:
+Four sub-commands:
  - `--encrypt`: encryption and injection
  - `--search` : search words, extract and decrypt
- - `--decrypt`: extraction and decryption
+ - `--decrypt`: direct extraction and decryption
  - `--generate-keys`: generate the keys above (requires KMS)
 
 
