@@ -11,8 +11,7 @@ import java.util.List;
 import com.cosmian.cloudproof_demo.AppException;
 
 /**
- * {@link InputPath} provides an abstraction to list and read files over the
- * various {@link AppFileSystem}
+ * {@link InputPath} provides an abstraction to list and read files over the various {@link AppFileSystem}
  */
 public class InputPath {
 
@@ -37,20 +36,18 @@ public class InputPath {
         AppFileSystem fs;
         if (uri.getScheme() == null || uri.getScheme().equals("file")) {
             fs = new LocalFileSystem();
-        } else if (uri.getScheme().equals("hdfs")) {
+        } else if (uri.getScheme().equals("hdfsk")) {
             try {
-                fs = new HDFS(new URI(uri.getScheme(), uri.getAuthority(), null, null, null).toString(),
-                        uri.getUserInfo());
+                fs = new HDFSKerberos(new URI(uri.getScheme(), uri.getAuthority(), null, null, null).toString(),
+                    uri.getUserInfo());
             } catch (URISyntaxException e) {
                 throw new AppException("cannot rebuild HDFS URL from: " + inputPathUri + ": " + e.getMessage(), e);
             }
-        } else if (uri.getScheme().equals("hdfso")) {
+        } else if (uri.getScheme().equals("hdfs")) {
             try {
-                fs = new HDFSOriginal(new URI("hdfs", uri.getAuthority(), null, null, null).toString(),
-                        uri.getUserInfo());
+                fs = new HDFS(new URI("hdfs", uri.getAuthority(), null, null, null).toString(), uri.getUserInfo());
             } catch (URISyntaxException e) {
-                throw new AppException(
-                        "canot rebuild HDFS URL from: " + inputPathUri + ": " + e.getMessage(), e);
+                throw new AppException("canot rebuild HDFS URL from: " + inputPathUri + ": " + e.getMessage(), e);
             }
         } else {
             throw new AppException("unknown scheme for the input: " + inputPathUri);
@@ -92,8 +89,7 @@ public class InputPath {
     }
 
     /**
-     * Resolves the absolute Path by following the same semantics as
-     * {@link Paths#get(String, String...)}
+     * Resolves the absolute Path by following the same semantics as {@link Paths#get(String, String...)}
      * 
      * @param relativePath
      * @return the absolute path

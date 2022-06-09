@@ -16,23 +16,22 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
 import com.cosmian.cloudproof_demo.sse.Sse.Bytes;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.Sse.WordHash;
-
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
 
 public class DseTest {
 
     @BeforeAll
     public static void before_all() {
-        App.configureLog4j();
         App.initLogging(Level.INFO);
     }
 
     private <B extends Bytes> HashMap<B, byte[]> generateEntries(Random rd, Class<B> clazz, int numEntries,
-            int ciphertextLen) {
+        int ciphertextLen) {
         // generate NUM_LINES DB UIds of WORDS_PER_LINE words each
         System.out.print("Generating " + numEntries + " entries with key " + clazz.getName() + "....");
         final long genStart = System.nanoTime();
@@ -44,7 +43,7 @@ public class DseTest {
             try {
                 key = clazz.getDeclaredConstructor(byte[].class).newInstance(keyB);
             } catch (InstantiationException | IllegalAccessException | IllegalArgumentException
-                    | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+                | InvocationTargetException | NoSuchMethodException | SecurityException e) {
                 System.err.println("Could not generate entries: " + e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException("Could not generate entries: " + e.getMessage(), e);

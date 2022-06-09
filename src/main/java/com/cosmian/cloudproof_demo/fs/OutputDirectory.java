@@ -1,5 +1,6 @@
 package com.cosmian.cloudproof_demo.fs;
 
+import java.io.Serializable;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -7,9 +8,10 @@ import java.nio.file.Paths;
 
 import com.cosmian.cloudproof_demo.AppException;
 
-public class OutputDirectory {
+public class OutputDirectory implements Serializable {
 
     final AppFileSystem fs;
+
     final Path directory;
 
     public OutputDirectory(AppFileSystem fs, Path directory) {
@@ -23,29 +25,25 @@ public class OutputDirectory {
         try {
             uri = new URI(uriString);
         } catch (URISyntaxException e) {
-            throw new AppException("invalid URI for the output directory: " + uriString + ": " + e.getMessage(),
-                    e);
+            throw new AppException("invalid URI for the output directory: " + uriString + ": " + e.getMessage(), e);
         }
         Path directory = Paths.get(uri.getPath());
 
         AppFileSystem fs;
         if (uri.getScheme() == null || uri.getScheme().equals("file")) {
             fs = new LocalFileSystem();
+        } else if (uri.getScheme().equals("hdfsk")) {
+            try {
+                fs = new HDFSKerberos(new URI(uri.getScheme(), uri.getAuthority(), null, null, null).toString(),
+                    uri.getUserInfo());
+            } catch (URISyntaxException e) {
+                throw new AppException("canot rebuild HDFS URL from: " + uriString + ": " + e.getMessage(), e);
+            }
         } else if (uri.getScheme().equals("hdfs")) {
             try {
-                fs = new HDFS(new URI(uri.getScheme(), uri.getAuthority(), null, null, null).toString(),
-                        uri.getUserInfo());
+                fs = new HDFS(new URI("hdfs", uri.getAuthority(), null, null, null).toString(), uri.getUserInfo());
             } catch (URISyntaxException e) {
-                throw new AppException(
-                        "canot rebuild HDFS URL from: " + uriString + ": " + e.getMessage(), e);
-            }
-        } else if (uri.getScheme().equals("hdfso")) {
-            try {
-                fs = new HDFSOriginal(new URI("hdfs", uri.getAuthority(), null, null, null).toString(),
-                        uri.getUserInfo());
-            } catch (URISyntaxException e) {
-                throw new AppException(
-                        "canot rebuild HDFS URL from: " + uriString + ": " + e.getMessage(), e);
+                throw new AppException("canot rebuild HDFS URL from: " + uriString + ": " + e.getMessage(), e);
             }
         } else {
             throw new AppException("unknown scheme for the output directory: " + uriString);

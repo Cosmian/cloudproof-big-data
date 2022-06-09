@@ -1,19 +1,30 @@
 {
     "cSpell.words": [
         "appender",
+        "BCEF",
+        "Bnpp",
+        "BNPPF",
         "ciphertext",
         "cloudproof",
-        "Cloudproof",
-        "Cosmian",
+        "cosmian",
         "datacenter",
         "Datacenter",
         "datastax",
-        "hadoop",
+        "EUDBD",
         "HDFS",
-        "hdfso",
+        "hdfsk",
+        "keyspace",
+        "Kmip",
         "mkdir",
         "upsert",
+        "upserted",
+        "Upserter",
         "upserting"
     ],
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "cSpell.language": "en,fr,en-GB",
+    "java.format.settings.url": ".vscode/codestyle-java.xml",
+    "[java]": {
+        "editor.detectIndentation": false
+    }
 }

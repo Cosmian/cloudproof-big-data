@@ -147,7 +147,15 @@ When policy attributes of a record make the expression `true`, the record can be
 
 ## Software
 
-Java standalone program that performs injection with encryption to HDFS and indexing to Cassandra and secure querying to Cassandra extraction with decryption from HDFS.
+The program comes in 2 flavors:
+
+ - as a java standalone executable
+ - and as a Spark program
+
+It performs 
+
+ - injection with encryption to HDFS and indexing to Cassandra 
+  - and secure querying to Cassandra extraction with decryption from HDFS.
 
 Fot instructions on how to build the software, see the [building](#building) section at the end.
 
@@ -159,66 +167,100 @@ Four sub-commands:
 
 
 ```
-❯ java -jar target/cloudproof-demo-1.0.0.jar
+>java -jar target/cloudproof-demo-2.0.0.jar 
+Jun 09, 2022 10:30:19 AM com.cosmian.cloudproof_demo.App main
+INFO: Stating standalone app with args: []
 usage: usage: app SUB-COMMAND [OPTIONS] [SOURCE URI] [WORD1, WORD2,...]
- -c,--clear-text-filename <FILENAME>   the name of the clear text file
-                                       when running decryption. Defaults
-                                       to clear.txt
- -d,--decrypt                          decrypt the supplied files and
-                                       directories URI(s)
- -dc,--dse-datacenter <DATACENTER>     the datacenter of the DSE server.
-                                       Defaults to NULL or dc1 if the IP
-                                       is 127.0.0.1
- -di,--dse-ip <IP>                     the IP address of the DSE server.
-                                       Defaults to 127.0.0.1
- -dp,--dse-port <PORT>                 the port of the DSE server.
-                                       Defaults to 9042
- -du,--dse-username <USERNAME>         the username to connect to the DSE
-                                       server. Defaults to NULL
- -dup,--dse-password <PASSWORD>        the password to connect to the DSE
-                                       server. Defaults to NULL
- -e,--encrypt                          encrypt the supplied files and
-                                       directories URI(s)
- -g,--generate-keys                    generate all the keys (needs a KMS access)
- -k,--key <FILE>                       the path to the key file: defaults
-                                       to key.json
- -o,--output-dir <URI>                 the path of the output directory.
-                                       Defaults to '.' for the filesystem,
-                                       /user/${user} for HDFS
- -s,--search                           search the supplied root URI for
-                                       the words
+ -c,--clear-text-filename <arg>   the name of the clear text file when
+                                  running decryption. Defaults to
+                                  clear.txt
+ -d,--decrypt                     decrypt the supplied files and
+                                  directories URI(s)
+ -dc,--dse-datacenter <arg>       the datacenter of the DSE server.
+                                  Defaults to NULL or dc1 if the IP is
+                                  127.0.0.1
+ -di,--dse-ip <arg>               the IP address of the DSE server.
+                                  Defaults to 127.0.0.1
+ -dk,--dse-keyspace <arg>         the keyspace to use for the tables.
+                                  Defaults to cosmian_sse
+ -dp,--dse-port <arg>             the port of the DSE server. Defaults to
+                                  9042
+ -du,--dse-username <arg>         the username to connect to the DSE
+                                  server. Defaults to NULL
+ -dup,--dse-password <arg>        the password to connect to the DSE
+                                  server. Defaults to NULL
+ -e,--encrypt                     encrypt the supplied files and
+                                  directories URI(s)
+ -g,--generate-keys               generate all the keys
+ -k,--key <arg>                   the path to the key file: defaults to
+                                  key.json
+ -o,--output-dir <arg>            the path of the output directory.
+                                  Defaults to '.' for the filesystem,
+                                  /user/${user} for HDFS
+ -or,--disjunction                run a disjunction (OR) between the
+                                  search words. Defaults to conjunction
+                                  (AND)
+ -s,--search                      search the supplied root URI for the
+                                  words
 ```
 
 ### Example Usage
 
-This shows example using the Hadoop test environment set-up below
+This shows examples using the Hadoop test environment set-up below
 
-Replace the `hdfso:` scheme with `hdfs:` in the URIs below if you wish to use 
+To use the spark version, simply replace `java -jar target/cloudproof-demo-2.0.0.jar` with `./spark-run.sh` in any example below
+
+Replace the `hdfs:` scheme with `hdfsk:` in the URIs below if you wish to use 
 the HDFS connector with kerberos authentication (the 2.7.5 hadoop docker below does NOT use Kerberos)
 
 #### Encrypting
 
-Encrypt 100 records read from `.src/test/resources/users.txt` and write the 100 files to HDFS at `"hdfs://root@localhost:9000/user/root/"`
+Encrypt 101 records read from `.src/test/resources/users.txt` and write the 100 files to HDFS at `"hdfs://root@localhost:9000/user/root/"`
 
-```bash
-java -jar target/cloudproof-demo-1.0.0.jar --encrypt \
-    -k src/test/resources/keys/public_key.json \
-    -o "hdfso://root@localhost:9000/user/root/" \
-    src/test/resources/users.txt
-```
+- standalone
+
+    ```bash
+    time java -jar target/cloudproof-demo-2.0.0.jar --encrypt \
+        -k src/test/resources/keys/public_key.json \
+        -o "hdfs://root@localhost:9000/user/root/" \
+        src/test/resources/users.txt
+    ```
+
+- spark
+
+    ```bash
+    time ./spark-run.sh --encrypt \
+        -k src/test/resources/keys/public_key.json \
+        -o "hdfs://root@localhost:9000/user/root/" \
+        src/test/resources/users.txt
+    ```
 
 #### Searching
 
 Alice can read the Marketing part (the region) of all users in France
 
-```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
-    -k src/test/resources/keys/user_Alice_key.json \
-    -o src/test/resources/dec/ \
-    -c search_Alice.txt \
-    "hdfso://root@localhost:9000/user/root/" \
-    "country=France"
-```
+ - standalone
+
+    ```bash
+    time java -jar target/cloudproof-demo-2.0.0.jar --search \
+        -k src/test/resources/keys/user_Alice_key.json \
+        -o src/test/resources/dec/ \
+        -c search_results.txt \
+        "hdfs://root@localhost:9000/user/root/" \
+        "country=France"
+    ```
+
+ - spark
+
+    ```bash
+    time ./spark-run.sh --search \
+        -k src/test/resources/keys/user_Alice_key.json \
+        -o src/test/resources/dec/ \
+        -c search_results.txt \
+        "hdfs://root@localhost:9000/user/root/" \
+        "country=France"
+    ```
+
 
 ```
 {"firstName":"Skyler","lastName":"Richmond","country":"France","region":"Chiapas"}
@@ -233,22 +275,22 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 ... but no user outside of France
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
+time java -jar target/cloudproof-demo-2.0.0.jar --search \
     -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
-    -c search_Alice.txt \
-    "hdfso://root@localhost:9000/user/root/" \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
     "country=Spain"
 ```
 
 Bob can read the email, phone and employee number part of all users in Spain, but not their marketing part (the region)
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
+time java -jar target/cloudproof-demo-2.0.0.jar --search \
     -k src/test/resources/keys/user_Bob_key.json \
     -o src/test/resources/dec/ \
-    -c search_Bob.txt \
-    "hdfso://root@localhost:9000/user/root/" \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
     "country=Spain"
 ```
 
@@ -266,13 +308,15 @@ As expected the Super Admin can find users in all countries and view all details
 
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
+time java -jar target/cloudproof-demo-2.0.0.jar --search \
     -k src/test/resources/keys/user_SuperAdmin_key.json \
     -o src/test/resources/dec/ \
-    -c search_SuperADmin.txt \
-    "hdfso://root@localhost:9000/user/root/" \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
     "Douglas"
 ```
+
+... returns 3 records with first name **or** last name being "Douglas"
 
 ```
 {"firstName":"Kalia","lastName":"Douglas","country":"France","security":"top_secret","phone":"03 56 82 77 04","region":"Tripura","email":"mus.proin@hotmail.net","employeeNumber":"AHM27UPN3HD"}
@@ -281,19 +325,67 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 
 ```
 
-Please note that this query retrieved first name or last name is equal to 'Douglas'.
+By default, search implements a conjunction (AND) when searching multiple words:
 
+
+```bash
+time java -jar target/cloudproof-demo-2.0.0.jar --search \
+    -k src/test/resources/keys/user_SuperAdmin_key.json \
+    -o src/test/resources/dec/ \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
+    "last=Douglas" "country=France"
+```
+
+... returns 2 records
+
+```
+{"firstName":"Kalia","lastName":"Douglas","country":"France","security":"top_secret","phone":"03 56 82 77 04","region":"Tripura","email":"mus.proin@hotmail.net","employeeNumber":"AHM27UPN3HD"}
+{"firstName":"Xander","lastName":"Douglas","country":"France","security":"top_secret","phone":"08 22 77 36 03","region":"Ile de France","email":"arcu.sed@protonmail.couk","employeeNumber":"DIY45MVM4TV"}
+```
+
+... while ...
+
+```bash
+time java -jar target/cloudproof-demo-2.0.0.jar --search \
+    -k src/test/resources/keys/user_SuperAdmin_key.json \
+    -o src/test/resources/dec/ \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
+    "last=Douglas" "country=Spain"
+```
+
+... does not return any record
+
+It is also possible to run a disjunction (OR) by specifying the `--or` option
+
+```bash
+time java -jar target/cloudproof-demo-2.0.0.jar --search --or \
+    -k src/test/resources/keys/user_SuperAdmin_key.json \
+    -o src/test/resources/dec/ \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
+    "first=Douglas" "last=Douglas"
+```
+
+...returns 3 records
+
+```
+{"firstName":"Douglas","lastName":"Jones","country":"Spain","security":"confidential","phone":"02 91 58 51 74","region":"Kahramanmaraş","email":"djones@yahoo.com","employeeNumber":"JCO88AVA2LH"}
+{"firstName":"Xander","lastName":"Douglas","country":"France","security":"top_secret","phone":"08 22 77 36 03","region":"Ile de France","email":"arcu.sed@protonmail.couk","employeeNumber":"DIY45MVM4TV"}
+{"firstName":"Kalia","lastName":"Douglas","country":"France","security":"top_secret","phone":"03 56 82 77 04","region":"Tripura","email":"mus.proin@hotmail.net","employeeNumber":"AHM27UPN3HD"}
+```
 
 #### Direct Decryption
 
 It is also possible to attempt to directly decrypt all records (i.e. without doing a search)
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --decrypt \
+time java -jar target/cloudproof-demo-2.0.0.jar --decrypt \
     -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
     -c direct_Alice.txt \
-    "hdfso://root@localhost:9000/user/root/"
+    "hdfs://root@localhost:9000/user/root/"
 ```
 
 
@@ -325,7 +417,7 @@ The software is linked to 2 separate open-source libraries made by Cosmian. For 
 3. Print the help to check everything is fine
 
     ```
-    java -jar target/cloudproof-demo-1.0.0.jar
+    java -jar target/cloudproof-demo-2.0.0.jar
     ```
 
 

@@ -10,8 +10,7 @@ import com.cosmian.cloudproof_demo.sse.Sse.WordHash;
 public interface DBInterface {
 
     /**
-     * Retrieve the encrypted values of the Entry Table for a given set of word
-     * hashes
+     * Retrieve the encrypted values of the Entry Table for a given set of word hashes
      * 
      * @param wordHashes as set of word hashes (sated by K₁)
      * @return the entries of word hashes to encrypted values
