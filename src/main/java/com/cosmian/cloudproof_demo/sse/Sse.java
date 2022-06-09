@@ -234,17 +234,28 @@ public class Sse {
      */
     static class EntryTableValue {
 
+        // this should never be updated
+        private final int revision;
+
         private Key r;
 
         private final Key kwi;
 
         public EntryTableValue(Key r, Key kStar, Word wi) throws CosmianException {
+            this.revision = 0;
             this.r = r;
             this.kwi = Key.derive(kStar, wi.bytes());
 
         }
 
-        protected EntryTableValue(Key r, Key kwi) throws CosmianException {
+        // protected EntryTableValue(Key r, Key kwi) throws CosmianException {
+        // this.revision = 0;
+        // this.r = r;
+        // this.kwi = kwi;
+        // }
+
+        protected EntryTableValue(int revision, Key r, Key kwi) throws CosmianException {
+            this.revision = revision;
             this.r = r;
             this.kwi = kwi;
         }
@@ -261,22 +272,31 @@ public class Sse {
         }
 
         /**
-         * The AES cipher text of the entry table value encrypted under key K₂
+         * The DB Record with ciphertext set to the AES cipher of the entry table value encrypted under key K₂
          * 
          * @param keyK2 the encryption key
          * @return the cipher text
          * @throws CosmianException
          */
-        public byte[] toBytes(Key keyK2) throws CosmianException {
+        public DBEntryTableRecord toRecord(Key keyK2) throws CosmianException {
             byte[] plaintext = new byte[2 * Key.KEY_LENGTH];
             System.arraycopy(this.r.bytes, 0, plaintext, 0, Key.KEY_LENGTH);
             System.arraycopy(this.kwi.bytes, 0, plaintext, Key.KEY_LENGTH, Key.KEY_LENGTH);
-            try {
-                return encryptAes(SECURE_RANDOM, keyK2, plaintext);
-            } catch (CosmianException e) {
-                throw new CosmianException(
-                    "Failed encrypting the Entry Table Value under key K₂: " + e.getCause().getMessage(), e);
-            }
+            final int revision = this.revision;
+            final byte[] ciphertext = encryptAes(SECURE_RANDOM, keyK2, plaintext);
+            return new DBEntryTableRecord() {
+
+                @Override
+                public int getRevision() {
+                    return revision;
+                }
+
+                @Override
+                public byte[] getEncryptedValue() {
+                    return ciphertext;
+                }
+
+            };
         }
 
         /**
@@ -287,17 +307,17 @@ public class Sse {
          * @return a {@link EntryTableValue}
          * @throws CosmianException if the it cannot be decrypted
          */
-        public static EntryTableValue fromBytes(byte[] encryptedValue, Key keyK2) throws CosmianException {
+        public static EntryTableValue fromRecord(DBEntryTableRecord record, Key keyK2) throws CosmianException {
             byte[] plaintext;
             try {
-                plaintext = decryptAes(SECURE_RANDOM, keyK2, encryptedValue);
+                plaintext = decryptAes(SECURE_RANDOM, keyK2, record.getEncryptedValue());
             } catch (CosmianException e) {
                 throw new CosmianException(
                     "Failed decrypting the Entry Table Value under key K₂: " + e.getCause().getMessage(), e);
             }
             Key r = new Key(Arrays.copyOfRange(plaintext, 0, Key.KEY_LENGTH));
             Key kwi = new Key(Arrays.copyOfRange(plaintext, Key.KEY_LENGTH, Key.KEY_LENGTH + Key.KEY_LENGTH));
-            return new EntryTableValue(r, kwi);
+            return new EntryTableValue(record.getRevision(), r, kwi);
         }
     }
 
@@ -371,15 +391,16 @@ public class Sse {
         HashMap<WordHash, EntryTableValue> entryTableValues = new HashMap<>();
         // fetch the current values from the entry table the given words and decrypt
         // them
-        for (Map.Entry<WordHash, byte[]> entry : db.getEntryTableEntries(wordHashToWord.keySet()).entrySet()) {
-            entryTableValues.put(entry.getKey(), EntryTableValue.fromBytes(entry.getValue(), k2));
+        for (Map.Entry<WordHash, DBEntryTableRecord> entry : db.getEntryTableEntries(wordHashToWord.keySet())
+            .entrySet()) {
+            entryTableValues.put(entry.getKey(), EntryTableValue.fromRecord(entry.getValue(), k2));
         }
         dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB1);
         long thenCrypto2 = System.nanoTime();
 
         // the entries that will be updated in the Entry table and their encrypted
         // values
-        HashMap<WordHash, byte[]> entryTableUpdates = new HashMap<>(wordHashToWord.size());
+        HashMap<WordHash, DBEntryTableRecord> entryTableUpdates = new HashMap<>(wordHashToWord.size());
 
         // entries in the Chain Table
         HashMap<Key, byte[]> chainTableUpdates = new HashMap<>();
@@ -510,7 +531,7 @@ public class Sse {
                 results.put(wi, new HashSet<>());
                 continue;
             }
-            EntryTableValue entryTableValue = EntryTableValue.fromBytes(encEntryTableValues, k2);
+            EntryTableValue entryTableValue = EntryTableValue.fromRecord(encEntryTableValues, k2);
 
             Set<Key> chainTableKeys = new HashSet<>();
             // the start of the chan value is r = H(Kwᵢ, wᵢ)

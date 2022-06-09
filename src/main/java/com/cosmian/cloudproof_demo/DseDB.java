@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.logging.Logger;
 
 import com.cosmian.CosmianException;
+import com.cosmian.cloudproof_demo.sse.DBEntryTableRecord;
 import com.cosmian.cloudproof_demo.sse.DBInterface;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.Sse.WordHash;
@@ -30,6 +31,29 @@ import com.datastax.oss.driver.api.core.cql.Row;
  * https://docs.datastax.com/en/dse/5.1/cql/index.html and https://docs.datastax.com/en/developer/java-driver/4.13/
  */
 public class DseDB implements DBInterface, AutoCloseable, Serializable {
+
+    public static class DseEntryTableRecord implements DBEntryTableRecord {
+
+        private final int revision;
+
+        private final byte[] encryptedValue;
+
+        public DseEntryTableRecord(int revision, byte[] encryptedValue) {
+            this.revision = revision;
+            this.encryptedValue = encryptedValue;
+        }
+
+        @Override
+        public int getRevision() {
+            return this.revision;
+        }
+
+        @Override
+        public byte[] getEncryptedValue() {
+            return this.encryptedValue;
+        }
+
+    }
 
     private static final Logger logger = Logger.getLogger(DseDB.class.getName());
 
@@ -122,7 +146,7 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
                 // REPLICATION = { "
                 // + "'class' : 'SimpleStrategy', " + "'replication_factor' : 1 " + "};");
                 session.execute("CREATE TABLE IF NOT EXISTS " + this.keyspace + ".entry_table "
-                    + "(key text , ciphertext blob, PRIMARY KEY(key));");
+                    + "(key text , ciphertext blob, revision int, PRIMARY KEY(key));");
                 session.execute("CREATE TABLE IF NOT EXISTS " + this.keyspace + ".chain_table "
                     + "(key text , ciphertext blob, PRIMARY KEY(key));");
             }
@@ -133,19 +157,22 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
     }
 
     @Override
-    public HashMap<WordHash, byte[]> getEntryTableEntries(Set<WordHash> wordHashes) throws CosmianException {
+    public HashMap<WordHash, DBEntryTableRecord> getEntryTableEntries(Set<WordHash> wordHashes)
+        throws CosmianException {
         try {
-            PreparedStatement prepared =
-                session.prepare("SELECT key, ciphertext from " + this.keyspace + ".entry_table " + "WHERE key IN ?;");
+            PreparedStatement prepared = session.prepare(
+                "SELECT key, revision, ciphertext from " + this.keyspace + ".entry_table " + "WHERE key IN ?;");
             List<String> list = new ArrayList<String>();
             for (WordHash wh : wordHashes) {
                 list.add(wh.toString());
             }
             BoundStatement bound = prepared.bind(list);
             ResultSet rs = this.session.execute(bound);
-            HashMap<WordHash, byte[]> results = new HashMap<>();
+            HashMap<WordHash, DBEntryTableRecord> results = new HashMap<>();
             for (Row row : rs.all()) {
-                results.put(WordHash.fromString(row.get(0, String.class)), row.get(1, ByteBuffer.class).array());
+                DseEntryTableRecord rec =
+                    new DseEntryTableRecord(row.get(0, Integer.class), row.get(1, ByteBuffer.class).array());
+                results.put(WordHash.fromString(row.get(0, String.class)), rec);
             }
             return results;
         } catch (Exception e) {
@@ -154,13 +181,24 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
     }
 
     @Override
-    public void upsertEntryTableEntries(HashMap<WordHash, byte[]> entries) throws CosmianException {
+    public void upsertEntryTableEntries(Map<WordHash, DBEntryTableRecord> entries) throws CosmianException {
         try {
-            PreparedStatement upsert = session.prepare(
-                "INSERT INTO " + this.keyspace + ".entry_table (key, ciphertext) " + "VALUES (:key, :ciphertext)");
+            PreparedStatement insert = session.prepare("INSERT INTO " + this.keyspace
+                + ".entry_table (key, revision, ciphertext) VALUES (:key, :revision, :ciphertext) IF NOT EXISTS");
+            PreparedStatement update = session.prepare("UPDATE " + this.keyspace
+                + ".entry_table SET revision = :new_revision, ciphertext = :ciphertext WHERE key = :key IF revision = :old_revision");
             BatchStatementBuilder batchBuilder = BatchStatement.builder(DefaultBatchType.LOGGED);
-            for (Map.Entry<WordHash, byte[]> entry : entries.entrySet()) {
-                batchBuilder.addStatement(upsert.bind(entry.getKey().toString(), ByteBuffer.wrap(entry.getValue())));
+            for (Map.Entry<WordHash, DBEntryTableRecord> entry : entries.entrySet()) {
+                String key = entry.getKey().toString();
+                int revision = entry.getValue().getRevision();
+                ByteBuffer ciphertext = ByteBuffer.wrap(entry.getValue().getEncryptedValue());
+                if (revision == 0) {
+                    // should be a new entry - attempt insert
+                    batchBuilder.addStatement(insert.bind(key, revision, ciphertext));
+                } else {
+                    // should be an update t the next revision
+                    batchBuilder.addStatement(update.bind(revision + 1, ciphertext, key, revision));
+                }
             }
             BatchStatement batch = batchBuilder.build();
             this.session.execute(batch);
@@ -209,7 +247,7 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
     }
 
     @Override
-    public void upsertChainTableEntries(HashMap<Key, byte[]> entries) throws CosmianException {
+    public void upsertChainTableEntries(Map<Key, byte[]> entries) throws CosmianException {
         try {
             PreparedStatement upsert = session.prepare(
                 "INSERT INTO " + this.keyspace + ".chain_table (key, ciphertext) " + "VALUES (:key, :ciphertext)");

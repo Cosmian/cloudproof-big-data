@@ -1,6 +1,6 @@
 package com.cosmian.cloudproof_demo.sse;
 
-import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import com.cosmian.CosmianException;
@@ -16,7 +16,7 @@ public interface DBInterface {
      * @return the entries of word hashes to encrypted values
      * @throws CosmianException if the map cannot be fetched
      */
-    HashMap<WordHash, byte[]> getEntryTableEntries(Set<WordHash> wordHashes) throws CosmianException;
+    Map<WordHash, DBEntryTableRecord> getEntryTableEntries(Set<WordHash> wordHashes) throws CosmianException;
 
     /**
      * Upsert the entries (Word hash -> encrypted value) in the Entry Table
@@ -24,7 +24,7 @@ public interface DBInterface {
      * @param entries the entries to upsert
      * @throws CosmianException if the entries cannot be upserted
      */
-    void upsertEntryTableEntries(HashMap<WordHash, byte[]> entries) throws CosmianException;
+    void upsertEntryTableEntries(Map<WordHash, DBEntryTableRecord> entries) throws CosmianException;
 
     /**
      * Retrieve the encrypted db UIDs from the Chain Table
@@ -41,6 +41,6 @@ public interface DBInterface {
      * @param entries the entries to upsert
      * @throws CosmianException if the entries cannot be upserted
      */
-    void upsertChainTableEntries(HashMap<Key, byte[]> entries) throws CosmianException;
+    void upsertChainTableEntries(Map<Key, byte[]> entries) throws CosmianException;
 
 }
