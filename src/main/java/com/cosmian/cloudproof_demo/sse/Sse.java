@@ -440,7 +440,7 @@ public class Sse {
             }
 
             // update the entry table
-            entryTableUpdates.put(wordHash, entryTableValue.toBytes(k2));
+            entryTableUpdates.put(wordHash, entryTableValue.toRecord(k2));
         }
 
         cryptoTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenCrypto2);
@@ -515,7 +515,7 @@ public class Sse {
         HashMap<Word, Set<DbUid>> results = new HashMap<>();
 
         // retrieve the Entry Table entries for the words
-        HashMap<WordHash, byte[]> entryTable = db.getEntryTableEntries(wordHashToWord.keySet());
+        Map<WordHash, DBEntryTableRecord> entryTable = db.getEntryTableEntries(wordHashToWord.keySet());
         if (entryTable.size() == 0) {
             logger.fine(() -> "Search: words not found in the entry table");
             return results;
@@ -526,12 +526,13 @@ public class Sse {
         for (Map.Entry<WordHash, Word> entry : wordHashToWord.entrySet()) {
             WordHash wordHash = entry.getKey();
             Word wi = entry.getValue();
-            byte[] encEntryTableValues = entryTable.get(wordHash);
+            DBEntryTableRecord record = entryTable.get(wordHash);
+            byte[] encEntryTableValues = record.getEncryptedValue();
             if (encEntryTableValues == null) {
                 results.put(wi, new HashSet<>());
                 continue;
             }
-            EntryTableValue entryTableValue = EntryTableValue.fromRecord(encEntryTableValues, k2);
+            EntryTableValue entryTableValue = EntryTableValue.fromRecord(record, k2);
 
             Set<Key> chainTableKeys = new HashSet<>();
             // the start of the chan value is r = H(Kwᵢ, wᵢ)
