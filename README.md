@@ -426,7 +426,7 @@ The software is linked to 2 separate open-source libraries made by Cosmian. For 
     ```
 
 
-### abe-gpsw
+### CoverCrypt
 
 A pre-built linux version of the abe_gpsw library is already available in the `src/main/resources/linux-x86-64` folder. However:
 

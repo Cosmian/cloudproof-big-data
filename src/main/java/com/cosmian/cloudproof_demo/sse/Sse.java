@@ -7,11 +7,13 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -353,8 +355,19 @@ public class Sse {
      * @param db the db that holds the index
      * @throws CosmianException if anything wrong happens
      */
-    public static long[] bulkUpsert(Key k, Key kStar, HashMap<DbUid, Set<Word>> dbUidToWords, DBInterface db)
+    public static long[] bulkUpsert(Key k, Key kStar, Map<DbUid, Set<Word>> dbUidToWords, DBInterface db)
         throws CosmianException {
+
+        final class ChainTableUpdate {
+            public Key key;
+
+            public byte[] value;
+
+            public ChainTableUpdate(Key key, byte[] value) {
+                this.key = key;
+                this.value = value;
+            }
+        }
 
         long cryptoTime = 0;
         long dbTime = 0;
@@ -403,7 +416,7 @@ public class Sse {
         HashMap<WordHash, DBEntryTableRecord> entryTableUpdates = new HashMap<>(wordHashToWord.size());
 
         // entries in the Chain Table
-        HashMap<Key, byte[]> chainTableUpdates = new HashMap<>();
+        HashMap<WordHash, List<ChainTableUpdate>> chainTableUpdatesMap = new HashMap<>();
 
         for (Map.Entry<WordHash, Word> entry : wordHashToWord.entrySet()) {
 
@@ -429,7 +442,20 @@ public class Sse {
             Iterator<DbUid> it = dbUidSet.iterator();
             while (true) {
                 DbUid dbUid = it.next();
-                chainTableUpdates.put(entryTableValue.r, generateChainTableValue(entryTableValue.kwi, dbUid));
+                final EntryTableValue etv = entryTableValue;
+                chainTableUpdatesMap.compute(wordHash, (wh, list) -> {
+                    if (list == null) {
+                        list = new ArrayList<ChainTableUpdate>();
+                    }
+                    try {
+                        list.add(new ChainTableUpdate(etv.r, generateChainTableValue(etv.kwi, dbUid)));
+                    } catch (CosmianException e1) {
+                        logger.severe("Failed generating the chain table value for dbUid " + dbUid.toString()
+                            + ", wordHash " + wordHash.toString());
+                    }
+                    return list;
+                });
+                // chainTableUpdates.put(entryTableValue.r, generateChainTableValue(entryTableValue.kwi, dbUid));
                 if (it.hasNext()) {
                     // increment the next r value
                     entryTableValue.nextR();
@@ -447,10 +473,51 @@ public class Sse {
         long thenDB2 = System.nanoTime();
 
         // perform the DB updates
-        db.upsertEntryTableEntries(entryTableUpdates);
-        db.upsertChainTableEntries(chainTableUpdates);
-
+        Map<WordHash, Boolean> results = db.upsertEntryTableEntries(entryTableUpdates);
+        // - for Word hashes updated (i.e. result==true) perform the updates to the chain table
+        // - for the other one, attempt re-insertion
+        Map<Key, byte[]> chainTableUpdates = new HashMap<>();
+        results.entrySet().stream().filter(e -> e.getValue()).forEach(entry -> {
+            WordHash wordHash = entry.getKey();
+            // remove word from ap to DbUids
+            Word word = wordHashToWord.get(wordHash);
+            if (word == null) {
+                logger.warning("No word for word hash: " + wordHash.toString() + ". This should not happen");
+                return;
+            }
+            wordToDbUidSet.remove(word);
+            // add entry to chain table updates
+            List<ChainTableUpdate> list = chainTableUpdatesMap.get(wordHash);
+            if (list == null) {
+                logger.warning("No chain table updates for word: " + word + ". This should not happen");
+                return;
+            }
+            list.stream().forEach(ctu -> chainTableUpdates.put(ctu.key, ctu.value));
+        });
+        // perform updates on chain table
+        if (chainTableUpdates.size() > 0) {
+            db.upsertChainTableEntries(chainTableUpdates);
+        }
         dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB2);
+        // retry failed ones
+        if (wordToDbUidSet.size() > 0) {
+            // covert map back the ther way
+            Map<DbUid, Set<Word>> toRetry = new HashMap<>();
+            wordToDbUidSet.entrySet().forEach(e -> {
+                Word word = e.getKey();
+                Set<DbUid> dubUidsList = e.getValue();
+                dubUidsList.forEach(dbUid -> toRetry.compute(dbUid, (uid, words) -> {
+                    if (words == null) {
+                        words = new HashSet<Word>();
+                    }
+                    words.add(word);
+                    return words;
+                }));
+            });
+            long[] times = bulkUpsert(k, kStar, dbUidToWords, db);
+            cryptoTime += times[0];
+            dbTime += times[1];
+        }
 
         return new long[] {cryptoTime, dbTime};
     }

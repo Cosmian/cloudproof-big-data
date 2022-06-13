@@ -19,12 +19,14 @@ public interface DBInterface {
     Map<WordHash, DBEntryTableRecord> getEntryTableEntries(Set<WordHash> wordHashes) throws CosmianException;
 
     /**
-     * Upsert the entries (Word hash -> encrypted value) in the Entry Table
+     * Upsert the entries (Word hash -> encrypted value) in the Entry Table If there is a revision conflict, the
+     * operation will be unsuccessful and false will be returned in the results map
      * 
      * @param entries the entries to upsert
+     * @return a map of successful operations per WordHash
      * @throws CosmianException if the entries cannot be upserted
      */
-    void upsertEntryTableEntries(Map<WordHash, DBEntryTableRecord> entries) throws CosmianException;
+    Map<WordHash, Boolean> upsertEntryTableEntries(Map<WordHash, DBEntryTableRecord> entries) throws CosmianException;
 
     /**
      * Retrieve the encrypted db UIDs from the Chain Table

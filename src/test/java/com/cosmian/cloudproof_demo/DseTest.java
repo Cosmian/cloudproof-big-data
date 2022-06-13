@@ -16,13 +16,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import com.cosmian.cloudproof_demo.sse.DBEntryTableRecord;
 import com.cosmian.cloudproof_demo.sse.Sse.Bytes;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.Sse.WordHash;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 
 public class DseTest {
 
@@ -106,8 +106,10 @@ public class DseTest {
             db.truncateEntryTable();
             Map<WordHash, DBEntryTableRecord> entryTableEntries =
                 generateEntryTableEntries(rd, WordHash.class, NUM_ENTRIES, 32);
-            db.upsertEntryTableEntries(entryTableEntries);
+            Map<WordHash, Boolean> firstInsertResults = db.upsertEntryTableEntries(entryTableEntries);
             assertEquals(NUM_ENTRIES, db.entryTableSize());
+            assertEquals(NUM_ENTRIES, firstInsertResults.size());
+            firstInsertResults.values().stream().forEach(b -> assertEquals(true, b));
 
             HashMap<WordHash, DBEntryTableRecord> entryResults = db.getEntryTableEntries(entryTableEntries.keySet());
             assertEquals(entryTableEntries.size(), entryResults.size());
@@ -118,8 +120,36 @@ public class DseTest {
                 assertArrayEquals(original.getEncryptedValue(), entry.getValue().getEncryptedValue());
             }
 
-            // re*insert the same values
-            db.upsertEntryTableEntries(entryTableEntries);
+            // re-insert the same values
+            Map<WordHash, Boolean> secondInsertResults = db.upsertEntryTableEntries(entryTableEntries);
+            assertEquals(NUM_ENTRIES, secondInsertResults.size());
+            secondInsertResults.values().stream().forEach(b -> assertEquals(false, b));
+
+            // update the revision of the first 5
+            Map<WordHash, DBEntryTableRecord> updatedEntryTableEntries = new HashMap<>(entryTableEntries.size());
+            entryTableEntries.entrySet().stream().forEach((entry) -> {
+                updatedEntryTableEntries.put(entry.getKey(), new DBEntryTableRecord() {
+
+                    @Override
+                    public int getRevision() {
+                        return entry.getValue().getRevision() + 1;
+                    }
+
+                    @Override
+                    public byte[] getEncryptedValue() {
+                        return entry.getValue().getEncryptedValue();
+                    }
+
+                });
+            });
+            Map<WordHash, Boolean> firstUpdateResults = db.upsertEntryTableEntries(updatedEntryTableEntries);
+            assertEquals(NUM_ENTRIES, firstUpdateResults.size());
+            firstUpdateResults.values().stream().forEach(b -> assertEquals(true, b));
+
+            // second update - should return false with the same revisions ids
+            Map<WordHash, Boolean> secondUpdateResults = db.upsertEntryTableEntries(updatedEntryTableEntries);
+            assertEquals(NUM_ENTRIES, secondUpdateResults.size());
+            secondUpdateResults.values().stream().forEach(b -> assertEquals(false, b));
 
             // Chain Table
             db.truncateChainTable();

@@ -187,14 +187,15 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
     }
 
     @Override
-    public void upsertEntryTableEntries(Map<WordHash, DBEntryTableRecord> entries) throws CosmianException {
+    public Map<WordHash, Boolean> upsertEntryTableEntries(Map<WordHash, DBEntryTableRecord> entries)
+        throws CosmianException {
+        PreparedStatement insert =
+            session.prepare("INSERT INTO " + (this.keyspace == null ? "cosmian_sse" : this.keyspace)
+                + ".entry_table (key, revision, ciphertext) VALUES (:key, :revision, :ciphertext) IF NOT EXISTS");
+        PreparedStatement update = session.prepare("UPDATE " + (this.keyspace == null ? "cosmian_sse" : this.keyspace)
+            + ".entry_table SET revision = :new_revision, ciphertext = :ciphertext WHERE key = :key IF revision = :old_revision");
+        Map<WordHash, Boolean> results = new HashMap<>();
         try {
-            PreparedStatement insert =
-                session.prepare("INSERT INTO " + (this.keyspace == null ? "cosmian_sse" : this.keyspace)
-                    + ".entry_table (key, revision, ciphertext) VALUES (:key, :revision, :ciphertext)");
-            PreparedStatement update = session.prepare("UPDATE "
-                + (this.keyspace == null ? "cosmian_sse" : this.keyspace)
-                + ".entry_table SET revision = :new_revision, ciphertext = :ciphertext WHERE key = :key IF revision = :old_revision");
             for (Map.Entry<WordHash, DBEntryTableRecord> entry : entries.entrySet()) {
                 String key = entry.getKey().toString();
                 int revision = entry.getValue().getRevision();
@@ -206,14 +207,15 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
 
                 } else {
                     // should be an update t the next revision
-                    bound = update.bind(revision + 1, ciphertext, key, revision);
+                    bound = update.bind(revision, ciphertext, key, revision - 1);
                 }
                 ResultSet result = session.execute(bound);
-                System.out.println(result.all());
+                results.put(entry.getKey(), result.wasApplied());
             }
         } catch (Exception e) {
             throw new CosmianException("upsert in Entry Table failed: " + e.getMessage(), e);
         }
+        return results;
     }
 
     public void truncateEntryTable() throws CosmianException {
