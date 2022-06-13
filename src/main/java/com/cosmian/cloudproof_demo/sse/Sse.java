@@ -237,7 +237,7 @@ public class Sse {
     static class EntryTableValue {
 
         // this should never be updated
-        private final int revision;
+        private int revision;
 
         private Key r;
 
@@ -271,6 +271,10 @@ public class Sse {
             } catch (CosmianException e) {
                 throw new CosmianException("failed generating the next r value: " + e.getMessage(), e);
             }
+        }
+
+        public void incrementRevision() {
+            this.revision += 1;
         }
 
         /**
@@ -406,7 +410,9 @@ public class Sse {
         // them
         for (Map.Entry<WordHash, DBEntryTableRecord> entry : db.getEntryTableEntries(wordHashToWord.keySet())
             .entrySet()) {
-            entryTableValues.put(entry.getKey(), EntryTableValue.fromRecord(entry.getValue(), k2));
+            EntryTableValue etv = EntryTableValue.fromRecord(entry.getValue(), k2);
+            etv.incrementRevision();
+            entryTableValues.put(entry.getKey(), etv);
         }
         dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB1);
         long thenCrypto2 = System.nanoTime();
@@ -500,6 +506,8 @@ public class Sse {
         }
         dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB2);
         // retry failed ones
+        System.out.println(Thread.currentThread().getName() + ": WORDS: " + results.size() + " ORIGINAL ->"
+            + wordToDbUidSet.size() + " MORE");
         if (wordToDbUidSet.size() > 0) {
             // covert map back the ther way
             Map<DbUid, Set<Word>> toRetry = new HashMap<>();
@@ -514,7 +522,7 @@ public class Sse {
                     return words;
                 }));
             });
-            long[] times = bulkUpsert(k, kStar, dbUidToWords, db);
+            long[] times = bulkUpsert(k, kStar, toRetry, db);
             cryptoTime += times[0];
             dbTime += times[1];
         }
