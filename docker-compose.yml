@@ -1,0 +1,34 @@
+version: "3.9"
+    
+services:
+  hadoop-2.7.5:
+    image: zejnils/hadoop-docker
+    volumes:
+      - hadoop_data:/usr/local/hadoop/data
+      - hadoop_logs:/usr/local/hadoop/logs
+      - hadoop_shared:/usr/local/hadoop/shared
+      - hadoop_input:/usr/local/hadoop/input
+    restart: always
+    ports:
+      - "8088:8088"
+      - "8042:8042"
+      - "9000:9000"
+    
+  dse-5.1.20:
+    image: datastax/dse-server:5.1.20
+    volumes:
+      - dse_data:/var/lib/cassandra
+      - dse_logs:/var/log/cassandra
+    ports:
+      - "9042:9042"
+      - "9160:9160"
+    restart: always
+    environment:
+      DS_LICENSE: accept
+volumes:
+  dse_data: {}
+  dse_logs: {}
+  hadoop_data: {}
+  hadoop_logs: {}
+  hadoop_shared: {}
+  hadoop_input: {}

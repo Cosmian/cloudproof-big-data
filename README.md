@@ -1,8 +1,9 @@
-# Cloudproof-java-demo
-## Cloudproof encryption: encryption and secure search of large (Big Data) repositories in the cloud
+<h1>Cloudproof-java-demo</h1>
+
+## Cloudproof encryption
 
 Cloudproof provides encryption so that large repositories of data, and indexes 
- - can be safely stored encrypted and partitioned in the cloud then
+ - can be safely stored encrypted with embedded policy attributes in the cloud then
  - quickly and confidentially searched using encrypted indexes and queries
  
 Users can only decrypt data from partitions matching the access policy of their keys.
@@ -20,30 +21,34 @@ Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in t
 
 
 
+<!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
-  - [Cloudproof encryption: encryption and secure search of large (Big Data) repositories in the cloud](#cloudproof-encryption-encryption-and-secure-search-of-large-big-data-repositories-in-the-cloud)
-  - [Flow Overview](#flow-overview)
-      - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
-      - [Attributes Based Encryption](#attributes-based-encryption)
-  - [Policy](#policy)
-  - [User Keys](#user-keys)
-  - [Software](#software)
-    - [Example Usage](#example-usage)
-      - [Encrypting](#encrypting)
-      - [Searching](#searching)
-      - [Direct Decryption](#direct-decryption)
-    - [Building](#building)
-    - [main program: cloudproof-demo](#main-program-cloudproof-demo)
-    - [abe-gpsw](#abe-gpsw)
-      - [Building abe-gpsw for a different glibc](#building-abe-gpsw-for-a-different-glibc)
-    - [cosmian_java_lib](#cosmian_java_lib)
-    - [Setting up a test hadoop environment](#setting-up-a-test-hadoop-environment)
-      - [Listing Hadoop files](#listing-hadoop-files)
-    - [Setting up Cassandra DSE](#setting-up-cassandra-dse)
-      - [Running locally](#running-locally)
-    - [Building a zip of this demo](#building-a-zip-of-this-demo)
+<!-- code_chunk_output -->
 
- 
+- [Cloudproof encryption](#cloudproof-encryption)
+- [Flow Overview](#flow-overview)
+    - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
+    - [Attributes Based Encryption](#attributes-based-encryption)
+- [Policy](#policy)
+- [User Keys](#user-keys)
+- [Software](#software)
+  - [Example Usage](#example-usage)
+    - [Encrypting](#encrypting)
+    - [Searching](#searching)
+    - [Direct Decryption](#direct-decryption)
+  - [Building](#building)
+  - [main program: cloudproof-demo](#main-program-cloudproof-demo)
+  - [abe-gpsw](#abe-gpsw)
+    - [Building abe-gpsw for a different glibc](#building-abe-gpsw-for-a-different-glibc)
+  - [cosmian_java_lib](#cosmian_java_lib)
+  - [Setting up a test hadoop environment](#setting-up-a-test-hadoop-environment)
+    - [Listing Hadoop files](#listing-hadoop-files)
+  - [Setting up Cassandra DSE](#setting-up-cassandra-dse)
+    - [Running locally](#running-locally)
+  - [Building a zip of this demo](#building-a-zip-of-this-demo)
+
+<!-- /code_chunk_output -->
+
 
 ## Flow Overview
 

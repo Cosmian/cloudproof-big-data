@@ -3,6 +3,7 @@ package com.cosmian.cloudproof_demo;
 import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,6 +19,8 @@ import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.Sse.WordHash;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
+import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
@@ -84,7 +87,7 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
          * a default configuration to connect to a local {@link DseDB} without authentication
          */
         public Configuration() {
-            this("127.0.0.1", 9042, "dc1", null, null, "cosmian_sse");
+            this("127.0.0.1", 9042, "dc1", null, null, null);
         }
 
     }
@@ -99,7 +102,7 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
      * @throws CosmianException if the local DSE cannot be contacted
      */
     public DseDB() throws CosmianException {
-        this("127.0.0.1", 9042, "dc1", null, null, "cosmian_sse");
+        this("127.0.0.1", 9042, "dc1", null, null, null);
     }
 
     /**
@@ -130,6 +133,8 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
         try {
             CqlSessionBuilder sessionBuilder =
                 CqlSession.builder().addContactPoint(new InetSocketAddress(ipAddress, port));
+            sessionBuilder = sessionBuilder.withConfigLoader(DriverConfigLoader.programmaticBuilder()
+                .withDuration(DefaultDriverOption.REQUEST_TIMEOUT, Duration.ofMillis(60000)).build());
 
             if (dataCenter != null) {
                 sessionBuilder = sessionBuilder.withLocalDatacenter(dataCenter);
@@ -141,13 +146,14 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
             {
                 // 2.3.0 - deactivated because fails if the user does not have the right to
                 // create a keyspace even if the keyspace already exists
-                //
-                // session.execute("CREATE KEYSPACE IF NOT EXISTS cosmian_sse " + "WITH
-                // REPLICATION = { "
-                // + "'class' : 'SimpleStrategy', " + "'replication_factor' : 1 " + "};");
-                session.execute("CREATE TABLE IF NOT EXISTS " + this.keyspace + ".entry_table "
+                // null is the value for testing
+                if (keyspace == null) {
+                    session.execute("CREATE KEYSPACE IF NOT EXISTS cosmian_sse " + "WITH REPLICATION = { "
+                        + "'class' : 'SimpleStrategy', " + "'replication_factor' : 1 " + "};");
+                }
+                session.execute("CREATE TABLE IF NOT EXISTS cosmian_sse.entry_table "
                     + "(key text , ciphertext blob, revision int, PRIMARY KEY(key));");
-                session.execute("CREATE TABLE IF NOT EXISTS " + this.keyspace + ".chain_table "
+                session.execute("CREATE TABLE IF NOT EXISTS cosmian_sse.chain_table "
                     + "(key text , ciphertext blob, PRIMARY KEY(key));");
             }
             this.session = session;
@@ -160,8 +166,8 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
     public HashMap<WordHash, DBEntryTableRecord> getEntryTableEntries(Set<WordHash> wordHashes)
         throws CosmianException {
         try {
-            PreparedStatement prepared = session.prepare(
-                "SELECT key, revision, ciphertext from " + this.keyspace + ".entry_table " + "WHERE key IN ?;");
+            PreparedStatement prepared = session.prepare("SELECT key, revision, ciphertext from "
+                + (this.keyspace == null ? "cosmian_sse" : this.keyspace) + ".entry_table " + "WHERE key IN ?;");
             List<String> list = new ArrayList<String>();
             for (WordHash wh : wordHashes) {
                 list.add(wh.toString());
@@ -171,7 +177,7 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
             HashMap<WordHash, DBEntryTableRecord> results = new HashMap<>();
             for (Row row : rs.all()) {
                 DseEntryTableRecord rec =
-                    new DseEntryTableRecord(row.get(0, Integer.class), row.get(1, ByteBuffer.class).array());
+                    new DseEntryTableRecord(row.get(1, Integer.class), row.get(2, ByteBuffer.class).array());
                 results.put(WordHash.fromString(row.get(0, String.class)), rec);
             }
             return results;
@@ -183,25 +189,28 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
     @Override
     public void upsertEntryTableEntries(Map<WordHash, DBEntryTableRecord> entries) throws CosmianException {
         try {
-            PreparedStatement insert = session.prepare("INSERT INTO " + this.keyspace
-                + ".entry_table (key, revision, ciphertext) VALUES (:key, :revision, :ciphertext) IF NOT EXISTS");
-            PreparedStatement update = session.prepare("UPDATE " + this.keyspace
+            PreparedStatement insert =
+                session.prepare("INSERT INTO " + (this.keyspace == null ? "cosmian_sse" : this.keyspace)
+                    + ".entry_table (key, revision, ciphertext) VALUES (:key, :revision, :ciphertext)");
+            PreparedStatement update = session.prepare("UPDATE "
+                + (this.keyspace == null ? "cosmian_sse" : this.keyspace)
                 + ".entry_table SET revision = :new_revision, ciphertext = :ciphertext WHERE key = :key IF revision = :old_revision");
-            BatchStatementBuilder batchBuilder = BatchStatement.builder(DefaultBatchType.LOGGED);
             for (Map.Entry<WordHash, DBEntryTableRecord> entry : entries.entrySet()) {
                 String key = entry.getKey().toString();
                 int revision = entry.getValue().getRevision();
                 ByteBuffer ciphertext = ByteBuffer.wrap(entry.getValue().getEncryptedValue());
+                BoundStatement bound;
                 if (revision == 0) {
                     // should be a new entry - attempt insert
-                    batchBuilder.addStatement(insert.bind(key, revision, ciphertext));
+                    bound = insert.bind(key, revision, ciphertext);
+
                 } else {
                     // should be an update t the next revision
-                    batchBuilder.addStatement(update.bind(revision + 1, ciphertext, key, revision));
+                    bound = update.bind(revision + 1, ciphertext, key, revision);
                 }
+                ResultSet result = session.execute(bound);
+                System.out.println(result.all());
             }
-            BatchStatement batch = batchBuilder.build();
-            this.session.execute(batch);
         } catch (Exception e) {
             throw new CosmianException("upsert in Entry Table failed: " + e.getMessage(), e);
         }
@@ -209,7 +218,8 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
 
     public void truncateEntryTable() throws CosmianException {
         try {
-            this.session.execute("TRUNCATE " + this.keyspace + ".entry_table;");
+            this.session
+                .execute("TRUNCATE " + (this.keyspace == null ? "cosmian_sse" : this.keyspace) + ".entry_table;");
         } catch (Exception e) {
             throw new CosmianException("truncate of Entry Table failed: " + e.getMessage(), e);
         }
@@ -217,7 +227,8 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
 
     public long entryTableSize() throws CosmianException {
         try {
-            ResultSet rs = this.session.execute("SELECT COUNT(*) FROM " + this.keyspace + ".entry_table;");
+            ResultSet rs = this.session.execute(
+                "SELECT COUNT(*) FROM " + (this.keyspace == null ? "cosmian_sse" : this.keyspace) + ".entry_table;");
             Row row = rs.one();
             return row.getLong(0);
         } catch (Exception e) {
@@ -228,8 +239,8 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
     @Override
     public Set<byte[]> getChainTableEntries(Set<Key> chainTableKeys) throws CosmianException {
         try {
-            PreparedStatement prepared =
-                session.prepare("SELECT key, ciphertext from " + this.keyspace + ".chain_table " + "WHERE key IN ?;");
+            PreparedStatement prepared = session.prepare("SELECT key, ciphertext from "
+                + (this.keyspace == null ? "cosmian_sse" : this.keyspace) + ".chain_table " + "WHERE key IN ?;");
             List<String> list = new ArrayList<String>();
             for (Key key : chainTableKeys) {
                 list.add(key.toString());
@@ -249,8 +260,9 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
     @Override
     public void upsertChainTableEntries(Map<Key, byte[]> entries) throws CosmianException {
         try {
-            PreparedStatement upsert = session.prepare(
-                "INSERT INTO " + this.keyspace + ".chain_table (key, ciphertext) " + "VALUES (:key, :ciphertext)");
+            PreparedStatement upsert =
+                session.prepare("INSERT INTO " + (this.keyspace == null ? "cosmian_sse" : this.keyspace)
+                    + ".chain_table (key, ciphertext) " + "VALUES (:key, :ciphertext)");
             BatchStatementBuilder batchBuilder = BatchStatement.builder(DefaultBatchType.LOGGED);
             for (Map.Entry<Key, byte[]> entry : entries.entrySet()) {
                 batchBuilder.addStatement(upsert.bind(entry.getKey().toString(), ByteBuffer.wrap(entry.getValue())));
@@ -265,7 +277,8 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
 
     public void truncateChainTable() throws CosmianException {
         try {
-            this.session.execute("TRUNCATE " + this.keyspace + ".chain_table;");
+            this.session
+                .execute("TRUNCATE " + (this.keyspace == null ? "cosmian_sse" : this.keyspace) + ".chain_table;");
         } catch (Exception e) {
             throw new CosmianException("truncate of Entry Table failed: " + e.getMessage(), e);
         }
@@ -273,7 +286,8 @@ public class DseDB implements DBInterface, AutoCloseable, Serializable {
 
     public long chainTableSize() throws CosmianException {
         try {
-            ResultSet rs = this.session.execute("SELECT COUNT(*) FROM " + this.keyspace + ".chain_table;");
+            ResultSet rs = this.session.execute(
+                "SELECT COUNT(*) FROM " + (this.keyspace == null ? "cosmian_sse" : this.keyspace) + ".chain_table;");
             Row row = rs.one();
             return row.getLong(0);
         } catch (Exception e) {

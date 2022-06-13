@@ -26,5 +26,16 @@
     "java.format.settings.url": ".vscode/codestyle-java.xml",
     "[java]": {
         "editor.detectIndentation": false
-    }
+    },
+    "sqltools.connections": [
+        {
+            "server": "localhost",
+            "port": 9042,
+            "previewLimit": 50,
+            "askForPassword": true,
+            "driver": "Cassandra",
+            "name": "cloudproof_demo",
+            "database": "cosmian_sse"
+        }
+    ]
 }
