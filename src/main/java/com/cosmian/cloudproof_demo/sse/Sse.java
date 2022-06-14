@@ -373,9 +373,19 @@ public class Sse {
     public static long[] bulkUpsert(Key k, Key kStar, Map<DbUid, Set<Word>> dbUidToWords, DBInterface db)
         throws CosmianException {
 
+        // record benchmarks
+        long cryptoTime = 0;
+        long dbTime = 0;
+
+        long thenCrypto1 = System.nanoTime();
+
         // First compute derived keys K1 and K2
         Key k1 = Key.derive(k, K1_SALT);
         Key k2 = Key.derive(k, K2_SALT);
+
+        // record time
+        cryptoTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenCrypto1);
+        long thenDB0 = System.nanoTime();
 
         // build a map of clear text words to DbUidSet and a map of word hash to word
         HashMap<Word, Set<DbUid>> wordToDbUidSet = new HashMap<>();
@@ -395,19 +405,21 @@ public class Sse {
             }
         }
 
-        return bulkUpsertInternal(k1, k2, kStar, wordHashToWord, wordToDbUidSet, db);
+        dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB0);
+
+        // call internal part which may be recursive
+        long[] timings = bulkUpsertInternal(k1, k2, kStar, wordHashToWord, wordToDbUidSet, db);
+
+        return new long[] {cryptoTime + timings[0], dbTime + timings[1]};
     }
 
     private static long[] bulkUpsertInternal(Key k1, Key k2, Key kStar, HashMap<WordHash, Word> wordHashToWord,
         HashMap<Word, Set<DbUid>> wordToDbUidSet, DBInterface db) throws CosmianException {
 
+        // record benchmarks
         long cryptoTime = 0;
         long dbTime = 0;
 
-        long thenCrypto1 = System.nanoTime();
-
-        // record time
-        cryptoTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenCrypto1);
         long thenDB1 = System.nanoTime();
 
         // a map of Table Entry, word hash to clear text values
@@ -420,6 +432,7 @@ public class Sse {
             etv.incrementRevision();
             entryTableValues.put(entry.getKey(), etv);
         }
+
         dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB1);
         long thenCrypto2 = System.nanoTime();
 
@@ -497,10 +510,10 @@ public class Sse {
                 logger.warning("No word for word hash: " + wordHash.toString() + ". This should not happen");
                 return;
             }
-            // this words were inserted and do not need to be retried
+            // these words were inserted and do not need to be retried
             wordToDbUidSet.remove(word);
             wordHashToWord.remove(wordHash);
-            // add entry to chain table updates
+            // ... and the corresponding entries must be added to the chain table
             List<ChainTableUpdate> list = chainTableUpdatesMap.get(wordHash);
             if (list == null) {
                 logger.warning("No chain table updates for word: " + word + ". This should not happen");
@@ -512,10 +525,13 @@ public class Sse {
         if (chainTableUpdates.size() > 0) {
             db.upsertChainTableEntries(chainTableUpdates);
         }
+
         dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB2);
-        // retry failed ones
-        logger.fine(() -> Thread.currentThread().getName() + ": total words: " + entryTableUpdates.size() + ", "
-            + wordToDbUidSet.size() + " words need to be retried");
+
+        logger.info(() -> "SSE: " + Thread.currentThread().getName() + ": total words: " + entryTableUpdates.size()
+            + ", " + wordToDbUidSet.size() + " words need to be retried");
+
+        // retry failed/conflicted entries to entry table
         if (wordToDbUidSet.size() > 0) {
             long[] times = bulkUpsertInternal(k1, k2, kStar, wordHashToWord, wordToDbUidSet, db);
             cryptoTime += times[0];

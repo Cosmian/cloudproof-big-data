@@ -428,84 +428,10 @@ The software is linked to 2 separate open-source libraries made by Cosmian. For 
 
 ### CoverCrypt
 
-A pre-built linux version of the abe_gpsw library is already available in the `src/main/resources/linux-x86-64` folder. However:
+Pre-built linux versions of the cover_crypt library is already available in the `src/main/resources/linux-x86-64` and `src/main/resources/darwin-x86-64` folder. However:
 
- - this version is built against GLIBC 2.34 which may not be the version on your system
+ - this linux version is built against GLIBC 2.17 which may not be compatible with your system
  - this library is holding the cryptographic primitives: from a security standpoint, you should not trust the binary and build yourself from sources
-
-1. Install a recent rust compiler using rustup: [Instructions](https://rustup.rs/)
-2. Clone the abe_gpsw repository:
-    ```
-    git clone https://github.com/Cosmian/abe_gpsw.git
-    ```
-3. Checkout the version v0.6.5
-    ```
-    git checkout v0.6.5
-    ```
-
-4. Inside the abe_gpsw project directory, build the library unassigned
-    ```
-    cargo build --release --all-features
-    ```
-5. Copy the dynamic library in `target/release` subdirectory (called `libabe_gpsw.so` on Linux) to this `cloudproof-demo` project
-
-    - `src/main/resources/linux-x86-64` folder for a Linux Intel machine
-    - `src/main/resources/linux-amd64` folder for a Linux AMD machine
-    - `src/main/resources/darwin` folder for a Mac running MacOS
-    - `src/main/resources/win32-x86` folder for a Windows machine (untested)
-
-#### Building abe-gpsw for a different glibc
-
-Step 1. 2. and 3. are identical as above
-
-4. Pull a distribution with the appropriate glibc (here targeting 2.17)
-
-    ```sh
-    sudo docker pull centos:centos7.4.1708
-    ```
-
-
-5. Execute the shell, mounting the current directory to `/root/abe_gpsw` inside the docker
-
-    ```sh
-    sudo docker run -it --rm -v $(pwd):/root/abe_gpsw centos:centos7.4.1708 /bin/bash
-    ```
-
-6. Inside the docker container, install rustup
-
-    ```sh
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-    ```
-
-7. Set the rust environment variables
-
-    ```sh
-    source $HOME/.cargo/env
-    ```
-
-8. Install missing build tools
-
-    You may be missing linkers, etc... for centOs
-
-    ```sh
-    yum groupinstall "Development Tools"
-    ```
-
-    for Ubuntu
-
-    ```sh
-    sudo apt install build-essential
-    ```
-
-9. Build the library
-
-    ```sh
-    cd /root/abe_gpsw/
-    cargo build --release --all-features --target-dir target_2_17
-    ```
-
-The library binary is available in `target_2_17/release/libabe_gpsw.so` 
-and should be placed in `src/main/resources/linux-x86-64` of this project
 
 ### cosmian_java_lib
 
@@ -517,9 +443,9 @@ If for security reasons, you still wish to do so,follow the steps below:
     git clone https://github.com/Cosmian/cosmian_java_lib.git
     ```
 
-2. Checkout the version v0.6.3
+2. Checkout the version v0.7.5
     ```
-    git checkout v0.6.3
+    git checkout v0.7.5
     ```
 3. In the root directory of the cosmian_java_lib project, build the jar:
     ```
