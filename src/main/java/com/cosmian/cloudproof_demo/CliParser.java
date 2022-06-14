@@ -78,7 +78,7 @@ public class CliParser {
         if (cli.hasOption("dse-password")) {
             dsePassword = cli.getOptionValue("dse-password");
         }
-        String dseKeyspace = "cosmian_sse";
+        String dseKeyspace = null;
         if (cli.hasOption("dse-keyspace")) {
             dseKeyspace = cli.getOptionValue("dse-keyspace");
         }
@@ -218,8 +218,8 @@ public class CliParser {
         options.addOption(new Option("dp", "dse-port", true, "the port of the DSE server. Defaults to 9042"));
         options.addOption(new Option("dc", "dse-datacenter", true,
             "the datacenter of the DSE server. Defaults to NULL or dc1 if the IP is 127.0.0.1"));
-        options.addOption(
-            new Option("dk", "dse-keyspace", true, "the keyspace to use for the tables. Defaults to cosmian_sse"));
+        options.addOption(new Option("dk", "dse-keyspace", true,
+            "the keyspace to use for the tables. Defaults to NULL in which case th program will attempt to create the cosmian_sse keyspace"));
         options.addOption(
             new Option("du", "dse-username", true, "the username to connect to the DSE server. Defaults to NULL"));
         options.addOption(

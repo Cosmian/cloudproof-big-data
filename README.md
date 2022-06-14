@@ -38,13 +38,13 @@ Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in t
     - [Direct Decryption](#direct-decryption)
   - [Building](#building)
   - [main program: cloudproof-demo](#main-program-cloudproof-demo)
-  - [abe-gpsw](#abe-gpsw)
+  - [CoverCrypt](#covercrypt)
     - [Building abe-gpsw for a different glibc](#building-abe-gpsw-for-a-different-glibc)
   - [cosmian_java_lib](#cosmian_java_lib)
-  - [Setting up a test hadoop environment](#setting-up-a-test-hadoop-environment)
-    - [Listing Hadoop files](#listing-hadoop-files)
-  - [Setting up Cassandra DSE](#setting-up-cassandra-dse)
-    - [Running locally](#running-locally)
+- [Setup a test environment](#setup-a-test-environment)
+  - [Spark 2.4.8 Hadoop 2.7](#spark-248-hadoop-27)
+  - [Cassandra DSE 5.1.20 and Hadoop HDFS 2.7.5](#cassandra-dse-5120-and-hadoop-hdfs-275)
+  - [Listing Hadoop files](#listing-hadoop-files)
   - [Building a zip of this demo](#building-a-zip-of-this-demo)
 
 <!-- /code_chunk_output -->
@@ -531,67 +531,42 @@ If for security reasons, you still wish to do so,follow the steps below:
     mvn install -Dmaven.test.skip
     ```
 
+## Setup a test environment
 
+### Spark 2.4.8 Hadoop 2.7
 
-### Setting up a test hadoop environment
+Download [Spark 2.4.8 Hadoop 2.7](https://archive.apache.org/dist/spark/spark-2.4.8/spark-2.4.8-bin-hadoop2.7.tgz)
+and install it ina folder. 
 
-This uses a docker version of hadoop 2.7.5 and makes it available to the `root` user at:
+Set the environment variable `SPARK_HOME` to the folder path.
 
- - root fs: `hdfs://root@localhost:9000/user/root`
- - admin console: http://localhost:8088
+### Cassandra DSE 5.1.20 and Hadoop HDFS 2.7.5
 
-1. Create a `hadoop-2.7.5` directory and the following sub-directories
+Start the servers using the provided `docker-compose.yml` file i.e. in this directory, run
 
-```bash
-mkdir shared
-mkdir logs
-mkdir input
+```sh
+docker-compose up
 ```
 
-2. Start hadoop running the following command in th `hadoop-2.7.5` directory
+### Listing Hadoop files
+
+Use the provided helper script
 
 ```bash
-docker run --name hadoop-2.7.5 \
--v $(pwd)/shared:/usr/local/hadoop/shared \
--v $(pwd)/logs:/usr/local/hadoop/logs \
--v hadoop-2.7.5-data:/usr/local/hadoop/data \
--v $(pwd)/input:/usr/local/hadoop/input \
--p 8088:8088 \
--p 8042:8042 \
--p 9000:9000 \
---rm \
-zejnils/hadoop-docker
-```
-
-3. To stop hadoop, run
-
-```bash
-docker stop hadoop-2.7.5
-```
-
-#### Listing Hadoop files
-
-Run the command inside the docker container:
-
-```bash
-sudo docker exec hadoop-2.7.5 /bin/bash -c "/usr/local/hadoop-2.7.5/bin/hadoop fs -ls"
+./hdfs.sh -ls
 ```
 
 ... to count them ....
 ```bash
-sudo docker exec hadoop-2.7.5 /bin/bash -c "/usr/local/hadoop-2.7.5/bin/hadoop fs -count ."
+./hdfs.sh "-count ."
 ```
 
-### Setting up Cassandra DSE
-
-- version 5.1.20:  `docker pull datastax/dse-server:5.1.20`
-- driver: https://docs.datastax.com/en/developer/java-driver/4.13/
-
-#### Running locally
-
+... and to delete them
 ```bash
-sudo docker run -e DS_LICENSE=accept --network host --name dse_5.1.20 -d datastax/dse-server:5.1.20
+./hdfs.sh "-rm -r /users/root/*"
 ```
+
+
 
 ### Building a zip of this demo
 

@@ -327,11 +327,22 @@ public class Sse {
         }
     }
 
+    static class ChainTableUpdate {
+        public Key key;
+
+        public byte[] value;
+
+        public ChainTableUpdate(Key key, byte[] value) {
+            this.key = key;
+            this.value = value;
+        }
+    }
+
     // These arbitrary salts are used to derive the Key K which is the symmetric key
     // known by every authorized clients
     // (= applications) - they can be overwritten by setting the public static
     // variable
-    private static byte[] K1_SALT =
+    private final static byte[] K1_SALT =
         {(byte) 0x6B, (byte) 0x66, (byte) 0xF3, (byte) 0x19, (byte) 0x28, (byte) 0x72, (byte) 0xFC, (byte) 0x41,
             (byte) 0xED, (byte) 0x17, (byte) 0x59, (byte) 0x74, (byte) 0x35, (byte) 0xAD, (byte) 0xE6, (byte) 0x62,
             (byte) 0xF0, (byte) 0x3D, (byte) 0x4A, (byte) 0x9F, (byte) 0x53, (byte) 0x6B, (byte) 0x76, (byte) 0xF2,
@@ -339,7 +350,7 @@ public class Sse {
             (byte) 0x6A, (byte) 0xDA, (byte) 0x18, (byte) 0x04, (byte) 0x1B, (byte) 0x13, (byte) 0x6B, (byte) 0x5D,
             (byte) 0x9F, (byte) 0xD0, (byte) 0x1D, (byte) 0x20, (byte) 0x22, (byte) 0xB2, (byte) 0x85, (byte) 0x1F};
 
-    private static byte[] K2_SALT =
+    private final static byte[] K2_SALT =
         {(byte) 0x22, (byte) 0x8D, (byte) 0x81, (byte) 0xDE, (byte) 0x62, (byte) 0x04, (byte) 0xA6, (byte) 0xB4,
             (byte) 0x0E, (byte) 0xC5, (byte) 0xA9, (byte) 0x99, (byte) 0x11, (byte) 0x50, (byte) 0x6A, (byte) 0xFC,
             (byte) 0x38, (byte) 0xEE, (byte) 0x52, (byte) 0xDE, (byte) 0x97, (byte) 0xB7, (byte) 0x9C, (byte) 0xFC,
@@ -347,7 +358,7 @@ public class Sse {
             (byte) 0xBF, (byte) 0x88, (byte) 0x55, (byte) 0x60, (byte) 0xD2, (byte) 0xAD, (byte) 0x5D, (byte) 0x09,
             (byte) 0xD0, (byte) 0x59, (byte) 0x19, (byte) 0x79, (byte) 0x52, (byte) 0x8E, (byte) 0x86, (byte) 0x55};
 
-    private static int LOOP_ITERATION_LIMIT = 10000;
+    private final static int LOOP_ITERATION_LIMIT = 10000;
 
     /**
      * Upsert the a set of words for a list od DB UIDs The size of the map should be significant so that t is hard for
@@ -361,22 +372,6 @@ public class Sse {
      */
     public static long[] bulkUpsert(Key k, Key kStar, Map<DbUid, Set<Word>> dbUidToWords, DBInterface db)
         throws CosmianException {
-
-        final class ChainTableUpdate {
-            public Key key;
-
-            public byte[] value;
-
-            public ChainTableUpdate(Key key, byte[] value) {
-                this.key = key;
-                this.value = value;
-            }
-        }
-
-        long cryptoTime = 0;
-        long dbTime = 0;
-
-        long thenCrypto1 = System.nanoTime();
 
         // First compute derived keys K1 and K2
         Key k1 = Key.derive(k, K1_SALT);
@@ -399,6 +394,17 @@ public class Sse {
                 wordHashToWord.put(wi.hash(k1.bytes), wi);
             }
         }
+
+        return bulkUpsertInternal(k1, k2, kStar, wordHashToWord, wordToDbUidSet, db);
+    }
+
+    private static long[] bulkUpsertInternal(Key k1, Key k2, Key kStar, HashMap<WordHash, Word> wordHashToWord,
+        HashMap<Word, Set<DbUid>> wordToDbUidSet, DBInterface db) throws CosmianException {
+
+        long cryptoTime = 0;
+        long dbTime = 0;
+
+        long thenCrypto1 = System.nanoTime();
 
         // record time
         cryptoTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenCrypto1);
@@ -491,7 +497,9 @@ public class Sse {
                 logger.warning("No word for word hash: " + wordHash.toString() + ". This should not happen");
                 return;
             }
+            // this words were inserted and do not need to be retried
             wordToDbUidSet.remove(word);
+            wordHashToWord.remove(wordHash);
             // add entry to chain table updates
             List<ChainTableUpdate> list = chainTableUpdatesMap.get(wordHash);
             if (list == null) {
@@ -506,27 +514,13 @@ public class Sse {
         }
         dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB2);
         // retry failed ones
-        System.out.println(Thread.currentThread().getName() + ": WORDS: " + results.size() + " ORIGINAL ->"
-            + wordToDbUidSet.size() + " MORE");
+        logger.fine(() -> Thread.currentThread().getName() + ": total words: " + entryTableUpdates.size() + ", "
+            + wordToDbUidSet.size() + " words need to be retried");
         if (wordToDbUidSet.size() > 0) {
-            // covert map back the ther way
-            Map<DbUid, Set<Word>> toRetry = new HashMap<>();
-            wordToDbUidSet.entrySet().forEach(e -> {
-                Word word = e.getKey();
-                Set<DbUid> dubUidsList = e.getValue();
-                dubUidsList.forEach(dbUid -> toRetry.compute(dbUid, (uid, words) -> {
-                    if (words == null) {
-                        words = new HashSet<Word>();
-                    }
-                    words.add(word);
-                    return words;
-                }));
-            });
-            long[] times = bulkUpsert(k, kStar, toRetry, db);
+            long[] times = bulkUpsertInternal(k1, k2, kStar, wordHashToWord, wordToDbUidSet, db);
             cryptoTime += times[0];
             dbTime += times[1];
         }
-
         return new long[] {cryptoTime, dbTime};
     }
 
