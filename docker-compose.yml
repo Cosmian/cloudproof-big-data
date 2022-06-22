@@ -2,6 +2,7 @@ version: "3.9"
     
 services:
   hadoop-2.7.5:
+    container_name: hadoop-2.7.5
     image: zejnils/hadoop-docker
     volumes:
       - hadoop_data:/usr/local/hadoop/data
@@ -16,6 +17,7 @@ services:
       - "50010:50010"
     
   dse-5.1.20:
+    container_name: dse-5.1.20
     image: datastax/dse-server:5.1.20
     volumes:
       - dse_data:/var/lib/cassandra
