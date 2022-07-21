@@ -1,6 +1,6 @@
 package com.cosmian.cloudproof_demo.fs;
 
-import java.io.InputStream;
+import java.io.DataInputStream;
 import java.io.OutputStream;
 import java.util.Iterator;
 
@@ -14,7 +14,7 @@ public interface AppFileSystem {
 
     public OutputStream getOutputStream(String filePath, boolean overwrite) throws AppException;
 
-    public InputStream getInputStream(String filePath) throws AppException;
+    public DataInputStream getInputStream(String filePath) throws AppException;
 
     public Iterator<String> listFiles(String directoryPath) throws AppException;
 

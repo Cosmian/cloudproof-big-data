@@ -39,12 +39,13 @@ Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in t
   - [Building](#building)
   - [main program: cloudproof-demo](#main-program-cloudproof-demo)
   - [CoverCrypt](#covercrypt)
-    - [Building abe-gpsw for a different glibc](#building-abe-gpsw-for-a-different-glibc)
   - [cosmian_java_lib](#cosmian_java_lib)
 - [Setup a test environment](#setup-a-test-environment)
   - [Spark 2.4.8 Hadoop 2.7](#spark-248-hadoop-27)
+  - [Kafka 2.7](#kafka-27)
   - [Cassandra DSE 5.1.20 and Hadoop HDFS 2.7.5](#cassandra-dse-5120-and-hadoop-hdfs-275)
   - [Listing Hadoop files](#listing-hadoop-files)
+  - [Creating a Kafka topic and testing it](#creating-a-kafka-topic-and-testing-it)
   - [Building a zip of this demo](#building-a-zip-of-this-demo)
 
 <!-- /code_chunk_output -->
@@ -169,11 +170,12 @@ Four sub-commands:
  - `--search` : search words, extract and decrypt
  - `--decrypt`: direct extraction and decryption
  - `--generate-keys`: generate the keys above (requires KMS)
+ - `--load-topic`: load data to a kafka topic
 
 
 ```
->java -jar target/cloudproof-demo-2.0.0.jar 
-Jun 09, 2022 10:30:19 AM com.cosmian.cloudproof_demo.App main
+❯ java -jar target/cloudproof-demo-3.0.0.jar 
+Jul 11, 2022 7:17:33 AM com.cosmian.cloudproof_demo.App main
 INFO: Stating standalone app with args: []
 usage: usage: app SUB-COMMAND [OPTIONS] [SOURCE URI] [WORD1, WORD2,...]
  -c,--clear-text-filename <arg>   the name of the clear text file when
@@ -199,6 +201,17 @@ usage: usage: app SUB-COMMAND [OPTIONS] [SOURCE URI] [WORD1, WORD2,...]
  -g,--generate-keys               generate all the keys
  -k,--key <arg>                   the path to the key file: defaults to
                                   key.json
+ -kt,--kafka                      when encrypting the list of passed input
+                                  are kafka topics
+ -l,--load-topic                  load a kafka topic with data
+ -ma,--max-age <arg>              the maximum age in seconds of an
+                                  encrypted file before it rolls over to a
+                                  new file. Defaults to MAX_INT (2 147 483
+                                  647)
+ -ms,--max-size <arg>             the maximum size in mega bytes of an
+                                  encrypted file before it rolls over to a
+                                  new file. Defaults to MAX_INT (2 147 483
+                                  647)
  -o,--output-dir <arg>            the path of the output directory.
                                   Defaults to '.' for the filesystem,
                                   /user/${user} for HDFS
@@ -207,13 +220,15 @@ usage: usage: app SUB-COMMAND [OPTIONS] [SOURCE URI] [WORD1, WORD2,...]
                                   (AND)
  -s,--search                      search the supplied root URI for the
                                   words
+ -zi,--drop-indexes               drop the indexes before running the
+                                  injector (i.e. --encrypt)
 ```
 
 ### Example Usage
 
 This shows examples using the Hadoop test environment set-up below
 
-To use the spark version, simply replace `java -jar target/cloudproof-demo-2.0.0.jar` with `./spark-run.sh` in any example below
+To use the spark version, simply replace `java -jar target/cloudproof-demo-3.0.0.jar` with `./spark-run.sh` in any example below
 
 Replace the `hdfs:` scheme with `hdfsk:` in the URIs below if you wish to use 
 the HDFS connector with kerberos authentication (the 2.7.5 hadoop docker below does NOT use Kerberos)
@@ -222,13 +237,34 @@ the HDFS connector with kerberos authentication (the 2.7.5 hadoop docker below d
 
 Encrypt 101 records read from `.src/test/resources/users.txt` and write the 100 files to HDFS at `"hdfs://root@localhost:9000/user/root/"`
 
-- standalone
+- standalone from files
 
     ```bash
-    time java -jar target/cloudproof-demo-2.0.0.jar --encrypt \
+    time java -jar target/cloudproof-demo-3.0.0.jar --encrypt \
         -k src/test/resources/keys/public_key.json \
         -o "hdfs://root@localhost:9000/user/root/" \
         src/test/resources/users.txt
+    ```
+
+-  standalone from kafka topic(s)
+
+    ```bash
+    java -jar target/cloudproof-demo-3.0.0.jar --encrypt \
+        -k src/test/resources/keys/public_key.json \
+        -o "hdfs://root@localhost:9000/user/root/" \
+        --kafka cloudproof-demo
+    ```    
+
+    When using Kafka, 
+    
+    1. the injector will look for a `kafka.properties` file in the current directory to configure the Kafka consumer.
+    
+    2. the injector will keep listening to the topic(s) until a line/record with the exact content `%END%` is received. 
+    The injector will then exit and print the benchmarks.
+
+    3. to load data to a kafka topic, one can use
+    ```bash
+    java -jar target/cloudproof-demo-3.0.0.jar --load-topic src/test/resources/users.txt
     ```
 
 - spark
@@ -247,7 +283,7 @@ Alice can read the Marketing part (the region) of all users in France
  - standalone
 
     ```bash
-    time java -jar target/cloudproof-demo-2.0.0.jar --search \
+    time java -jar target/cloudproof-demo-3.0.0.jar --search \
         -k src/test/resources/keys/user_Alice_key.json \
         -o src/test/resources/dec/ \
         -c search_results.txt \
@@ -280,7 +316,7 @@ Alice can read the Marketing part (the region) of all users in France
 ... but no user outside of France
 
 ```bash
-time java -jar target/cloudproof-demo-2.0.0.jar --search \
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
     -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
     -c search_results.txt \
@@ -291,7 +327,7 @@ time java -jar target/cloudproof-demo-2.0.0.jar --search \
 Bob can read the email, phone and employee number part of all users in Spain, but not their marketing part (the region)
 
 ```bash
-time java -jar target/cloudproof-demo-2.0.0.jar --search \
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
     -k src/test/resources/keys/user_Bob_key.json \
     -o src/test/resources/dec/ \
     -c search_results.txt \
@@ -313,7 +349,7 @@ As expected the Super Admin can find users in all countries and view all details
 
 
 ```bash
-time java -jar target/cloudproof-demo-2.0.0.jar --search \
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
     -k src/test/resources/keys/user_SuperAdmin_key.json \
     -o src/test/resources/dec/ \
     -c search_results.txt \
@@ -334,7 +370,7 @@ By default, search implements a conjunction (AND) when searching multiple words:
 
 
 ```bash
-time java -jar target/cloudproof-demo-2.0.0.jar --search \
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
     -k src/test/resources/keys/user_SuperAdmin_key.json \
     -o src/test/resources/dec/ \
     -c search_results.txt \
@@ -352,7 +388,7 @@ time java -jar target/cloudproof-demo-2.0.0.jar --search \
 ... while ...
 
 ```bash
-time java -jar target/cloudproof-demo-2.0.0.jar --search \
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
     -k src/test/resources/keys/user_SuperAdmin_key.json \
     -o src/test/resources/dec/ \
     -c search_results.txt \
@@ -365,7 +401,7 @@ time java -jar target/cloudproof-demo-2.0.0.jar --search \
 It is also possible to run a disjunction (OR) by specifying the `--or` option
 
 ```bash
-time java -jar target/cloudproof-demo-2.0.0.jar --search --or \
+time java -jar target/cloudproof-demo-3.0.0.jar --search --or \
     -k src/test/resources/keys/user_SuperAdmin_key.json \
     -o src/test/resources/dec/ \
     -c search_results.txt \
@@ -386,7 +422,7 @@ time java -jar target/cloudproof-demo-2.0.0.jar --search --or \
 It is also possible to attempt to directly decrypt all records (i.e. without doing a search)
 
 ```bash
-time java -jar target/cloudproof-demo-2.0.0.jar --decrypt \
+time java -jar target/cloudproof-demo-3.0.0.jar --decrypt \
     -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
     -c direct_Alice.txt \
@@ -422,7 +458,7 @@ The software is linked to 2 separate open-source libraries made by Cosmian. For 
 3. Print the help to check everything is fine
 
     ```
-    java -jar target/cloudproof-demo-2.0.0.jar
+    java -jar target/cloudproof-demo-3.0.0.jar
     ```
 
 
@@ -466,6 +502,10 @@ and install it ina folder.
 
 Set the environment variable `SPARK_HOME` to the folder path.
 
+### Kafka 2.7
+
+Download Kafka 2.7.2 from https://archive.apache.org/dist/kafka/2.7.2/kafka_2.12-2.7.2.tgz and extract it
+
 ### Cassandra DSE 5.1.20 and Hadoop HDFS 2.7.5
 
 Start the servers using the provided `docker-compose.yml` file i.e. in this directory, run
@@ -491,6 +531,28 @@ Use the provided helper script
 ```bash
 ./hdfs.sh "-rm -r /users/root/*"
 ```
+
+### Creating a Kafka topic and testing it
+
+In the `bin` directory of the Kafka install
+
+```sh
+./kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic cloudproof-demo
+```
+
+In a terminal window, create a producer:
+
+```sh
+./kafka-console-producer.sh --broker-list localhost:9092 --topic cloudproof-demo
+```
+
+... and in another window create a consumer...
+
+```sh
+./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic cloudproof-demo
+```
+
+... then type a message in the producer window, it should appear in the consumer window
 
 
 

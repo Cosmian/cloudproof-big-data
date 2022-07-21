@@ -2,14 +2,17 @@ package com.cosmian.cloudproof_demo.search;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Logger;
 
 import com.cosmian.CosmianException;
 import com.cosmian.cloudproof_demo.AppException;
-import com.cosmian.cloudproof_demo.Base58;
 import com.cosmian.cloudproof_demo.Benchmarks;
 import com.cosmian.cloudproof_demo.DseDB;
+import com.cosmian.cloudproof_demo.RecordUid;
 import com.cosmian.cloudproof_demo.extractor.StandaloneExtractor;
 import com.cosmian.cloudproof_demo.fs.InputPath;
 import com.cosmian.cloudproof_demo.fs.OutputDirectory;
@@ -32,10 +35,11 @@ public class StandaloneSearch implements Search {
         benchmarks.startRecording("total_time");
         benchmarks.startRecording("sse");
 
-        Set<byte[]> set = SseFinder.find(words, disjunction, k, dseConf);
-        logger.fine(() -> "found " + set.size() + " UIDs matching the search");
+        Set<byte[]> uids = SseFinder.find(words, disjunction, k, dseConf);
+        HashMap<String, List<Long>> positionsPerFile = RecordUid.positionsPerFile(uids);
+        logger.fine(() -> "found " + uids.size() + " UIDs matching the search");
 
-        benchmarks.stopRecording("sse", set.size());
+        benchmarks.stopRecording("sse", uids.size());
         benchmarks.startRecording("init");
 
         InputPath fsRootPath = InputPath.parse(fsRootUri);
@@ -62,16 +66,16 @@ public class StandaloneSearch implements Search {
             try (OutputStream os =
                 output.getFs().getOutputStream(output.getDirectory().resolve(cleartextFilename).toString(), true)) {
 
-                for (byte[] uid : set) {
-                    benchmarks.startRecording("record_total");
-                    String fileName = Base58.encode(uid);
-                    logger.finer(() -> "attempting to decrypt " + fsRootPath.resolve(fileName));
-                    long time = StandaloneExtractor.decryptAtPath(decryptionCache, os, fsRootPath.getFs(),
-                        fsRootPath.resolve(fileName));
-                    if (time > 0) {
-                        benchmarks.record("decryption", 1, time);
-                        numEntries += 1;
-                        benchmarks.stopRecording("record_total", 1);
+                benchmarks.startRecording("record_total");
+                for (Entry<String, List<Long>> entry : positionsPerFile.entrySet()) {
+                    String filename = entry.getKey();
+                    List<Long> positions = entry.getValue();
+                    logger.finer(() -> "attempting to decrypt " + fsRootPath.resolve(filename));
+                    long numDecrypted = StandaloneExtractor.decryptAtPathAndPositions(decryptionCache, os, fsRootPath,
+                        filename, positions, benchmarks);
+                    if (numDecrypted > 0) {
+                        numEntries += numDecrypted;
+                        benchmarks.stopRecording("record_total", numDecrypted);
                     }
                 }
             } catch (IOException e) {
@@ -87,7 +91,7 @@ public class StandaloneSearch implements Search {
             benchmarks.stopRecording("total_time", 1);
         }
         logBenchmarks(benchmarks);
-        return new long[] {set.size(), numEntries};
+        return new long[] {uids.size(), numEntries};
     }
 
     static void logBenchmarks(Benchmarks benchmarks) {
@@ -99,20 +103,38 @@ public class StandaloneSearch implements Search {
 
             builder.append("Found ").append(String.format("%,d", total_found)).append(" records and decrypted ")
                 .append(String.format("%,d", total_decrypted)).append(" in ")
-                .append(String.format("%,d", total_time / 1000)).append("ms (init: ")
-                .append(String.format("%,.1f", benchmarks.getSum("init") / total_time * 100.0)).append("%, sse: ")
-                .append(String.format("%,.1f", benchmarks.getSum("sse") / total_time * 100.0))
-                .append("%, hybrid decryption: ")
+                .append(String.format("%,d", total_time / 1000)).append("ms\n");
+
+            builder.append("  - init: ").append(String.format("%,.3f", benchmarks.getSum("init") / 1000)).append("ms (")
+                .append(String.format("%,.1f", benchmarks.getSum("init") / total_time * 100.0)).append("%)\n");
+
+            builder.append("  - sse: ").append(String.format("%,.3f", benchmarks.getSum("sse") / 1000)).append("ms (")
+                .append(String.format("%,.1f", benchmarks.getSum("sse") / total_time * 100.0)).append("%)\n");
+
+            builder.append("  - hybrid decryption: ")
+                .append(String.format("%,.3f", benchmarks.getSum("record_process_time") / 1000)).append("ms (")
                 .append(String.format("%,.1f", benchmarks.getSum("record_process_time") / total_time * 100.0))
                 .append("%)\n");
 
             double record_total = benchmarks.getAverage("record_total") / 1000.0;
-            builder.append("Average processing time per decrypted record : ")
-                .append(String.format("%,.3f", record_total)).append("ms");
+            builder.append("Average hybrid decryption time per record (excl. read) : ")
+                .append(String.format("%,.3f", record_total)).append("ms\n");
 
-            double record_decryption = benchmarks.getAverage("decryption") / 1000.0;
-            builder.append(", hybrid decryption: ").append(record_decryption).append("ms (")
-                .append(String.format("%,.2f", record_decryption / record_total * 100.0)).append("%)\n");
+            double record_attributes_decryption = benchmarks.getAverage("record_attributes_decryption") / 1000.0;
+            builder.append("  - attributes dec.: ").append(record_attributes_decryption).append("ms (")
+                .append(String.format("%,.2f", record_attributes_decryption / record_total * 100.0)).append("%)\n");
+
+            double record_bzip = benchmarks.getAverage("bzip") / 1000.0;
+            builder.append("  - bzip.: ").append(record_bzip).append("ms (")
+                .append(String.format("%,.2f", record_bzip / record_total * 100.0)).append("%)\n");
+
+            double record_symmetric_decryption = benchmarks.getAverage("record_block") / 1000.0;
+            builder.append("  - symmetric dec.: ").append(record_symmetric_decryption).append("ms (")
+                .append(String.format("%,.2f", record_symmetric_decryption / record_total * 100.0)).append("%)\n");
+
+            double other = record_total - record_attributes_decryption - record_bzip - record_symmetric_decryption;
+            builder.append("  - other ( mostly I/O): ").append(String.format("%,.3f", other)).append("ms (")
+                .append(String.format("%,.2f", other / record_total * 100.0)).append("%)\n");
 
             return builder.toString();
         });

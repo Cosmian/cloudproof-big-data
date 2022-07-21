@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.crypto.BadPaddingException;
@@ -528,8 +529,9 @@ public class Sse {
 
         dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB2);
 
-        logger.info(() -> "SSE: " + Thread.currentThread().getName() + ": total words: " + entryTableUpdates.size()
-            + ", " + wordToDbUidSet.size() + " words need to be retried");
+        Level level = wordToDbUidSet.size() > 0 ? Level.INFO : Level.FINE;
+        logger.log(level, () -> "SSE: " + Thread.currentThread().getName() + ": total words: "
+            + entryTableUpdates.size() + ", " + wordToDbUidSet.size() + " words need to be retried");
 
         // retry failed/conflicted entries to entry table
         if (wordToDbUidSet.size() > 0) {

@@ -1,16 +1,21 @@
 package com.cosmian.cloudproof_demo.extractor;
 
 import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.logging.Logger;
 
 import org.json.JSONObject;
 
 import com.cosmian.CosmianException;
 import com.cosmian.cloudproof_demo.AppException;
+import com.cosmian.cloudproof_demo.Benchmarks;
+import com.cosmian.cloudproof_demo.RecordUid;
 import com.cosmian.jna.FfiException;
 import com.cosmian.jna.cover_crypt.DecryptedHeader;
 import com.cosmian.jna.cover_crypt.Ffi;
@@ -19,14 +24,43 @@ public class RecordExtractor {
 
     private static final Logger logger = Logger.getLogger(RecordExtractor.class.getName());
 
+    public static class Record {
+        public final int encryptedLength;
+
+        public final byte[] clearText;
+
+        public Record(int encryptedLength, byte[] clearText) {
+            this.encryptedLength = encryptedLength;
+            this.clearText = clearText;
+        }
+    }
+
     /**
      * Decrypt the record
      */
-    public static byte[] process(int decryptionCache, byte[] uid, byte[] encryptedBytes) throws AppException {
+    public static Record readNext(int decryptionCache, RecordUid uid, DataInputStream is,
+        Optional<Benchmarks> benchmarks) throws AppException {
 
-        ByteArrayInputStream bai = new ByteArrayInputStream(encryptedBytes);
+        logger.finer(() -> "Decryption: record UID: " + uid.filename + " :: " + uid.mark);
 
         try {
+
+            byte[] recordSizeBuffer = new byte[4];
+            try {
+                is.readFully(recordSizeBuffer);
+            } catch (EOFException e) {
+                // EOF
+                logger.finer(() -> "EOF");
+                return new Record(0, new byte[] {});
+            }
+            int recordSize = ByteBuffer.wrap(recordSizeBuffer).order(ByteOrder.BIG_ENDIAN).getInt(0);
+
+            logger.finer(() -> "The next encrypted record size is: " + recordSize);
+
+            byte[] encryptedRecord = new byte[recordSize];
+            is.readFully(encryptedRecord);
+            ByteArrayInputStream bai = new ByteArrayInputStream(encryptedRecord);
+
             // decrypt the common part
             byte[] commonPart = decryptPart(decryptionCache, uid, bai);
             JSONObject json = new JSONObject(new String(commonPart, StandardCharsets.UTF_8));
@@ -61,7 +95,7 @@ public class RecordExtractor {
                 logger.finer(() -> " ... skipping the Security part");
             }
 
-            return json.toString().getBytes(StandardCharsets.UTF_8);
+            return new Record(recordSize + 4, json.toString().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             throw new AppException("Unexpected exception decrypting a part: " + e.getMessage(), e);
         }
@@ -70,7 +104,7 @@ public class RecordExtractor {
     /**
      * Decrypt a part
      */
-    static byte[] decryptPart(int decryptionCache, byte[] uid, ByteArrayInputStream bai)
+    static byte[] decryptPart(int decryptionCache, RecordUid uid, ByteArrayInputStream bai)
         throws AppException, IOException {
 
         byte[] headerBuffer = new byte[4];
@@ -94,7 +128,7 @@ public class RecordExtractor {
         byte[] encryptedContent = new byte[blockSize];
         bai.read(encryptedContent, 0, blockSize);
         try {
-            return Ffi.decryptBlock(decryptedHeader.getSymmetricKey(), uid, 0, encryptedContent);
+            return Ffi.decryptBlock(decryptedHeader.getSymmetricKey(), uid.toBytes(), 0, encryptedContent);
         } catch (FfiException e) {
             throw new AppException("failed to decrypt the content: " + e.getMessage(), e);
         }

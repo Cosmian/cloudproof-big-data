@@ -27,14 +27,19 @@ public class SparkInjector implements Injector {
 
     @Override
     public void run(Key k, Key kStar, String publicKeyJson, String outputDirectory, Configuration dseConf,
-        List<String> inputs) throws AppException {
+        List<String> inputs, boolean kafka, int maxSizeInMB, int maxAgeInSeconds, boolean dropIndexes)
+        throws AppException {
 
         benchmarks.startRecording("total_time");
 
         // Create a cache of the Public Key and Policy
         benchmarks.startRecording("init");
-        // truncate the DSE Index Tables - you may want to remove this
-        SseUpserter.truncate(dseConf);
+
+        // truncate the DSE Index Tables if needed
+        if (dropIndexes) {
+            SseUpserter.truncate(dseConf);
+        }
+
         benchmarks.stopRecording("init", 1);
 
         benchmarks.startRecording("record_process_time");
@@ -43,8 +48,8 @@ public class SparkInjector implements Injector {
             for (String inputPathString : inputs) {
                 LongAccumulator counter = spark.sc().longAccumulator();
                 JavaRDD<String> inputRdd = spark.textFile(inputPathString).cache();
-                inputRdd.foreachPartition(
-                    new SparkInjectionProcess(k, kStar, publicKeyJson, dseConf, outputDirectory, counter));
+                inputRdd.foreachPartition(new SparkInjectionProcess(k, kStar, publicKeyJson, dseConf, outputDirectory,
+                    counter, maxSizeInMB, maxAgeInSeconds));
                 numRecords += counter.value();
             }
         } finally {

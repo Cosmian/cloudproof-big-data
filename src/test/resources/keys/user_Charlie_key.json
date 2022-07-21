@@ -11,7 +11,7 @@
       "value" : [ {
         "tag" : "KeyMaterial",
         "type" : "ByteString",
-        "value" : "020106205DBA7F9E989C451A6B13DA9F54F47B876FC965664420C1B707787C5DDB7E020E00"
+        "value" : "02010620D93F699738D928C0D1E5BE4CCC2E9C8C1216ABC42851A0F79ED9FF77305D610000"
       }, {
         "tag" : "Attributes",
         "value" : [ {
@@ -33,7 +33,7 @@
             }, {
               "tag" : "LinkedObjectIdentifier",
               "type" : "TextString",
-              "value" : "a206560b-cbbb-4eb0-9218-53636acadc8a"
+              "value" : "f29d30c6-9520-424b-90a6-f95e9054bc9f"
             } ]
           } ]
         }, {

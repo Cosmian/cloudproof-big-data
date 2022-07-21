@@ -1,12 +1,8 @@
 package com.cosmian.cloudproof_demo.injector;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
@@ -15,7 +11,6 @@ import com.cosmian.CosmianException;
 import com.cosmian.cloudproof_demo.AppException;
 import com.cosmian.cloudproof_demo.Benchmarks;
 import com.cosmian.cloudproof_demo.DseDB;
-import com.cosmian.cloudproof_demo.fs.InputPath;
 import com.cosmian.cloudproof_demo.fs.OutputDirectory;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.SseUpserter;
@@ -23,6 +18,9 @@ import com.cosmian.jna.FfiException;
 import com.cosmian.jna.cover_crypt.Ffi;
 import com.cosmian.rest.kmip.objects.PublicKey;
 
+/**
+ * The standalone injector is a an{@link Injector} that runs as a standalone Java program
+ */
 public class StandaloneInjector implements Injector {
 
     private static final Logger logger = Logger.getLogger(StandaloneInjector.class.getName());
@@ -30,12 +28,12 @@ public class StandaloneInjector implements Injector {
     private final Benchmarks benchmarks = new Benchmarks();
 
     public StandaloneInjector() {
-
     }
 
     @Override
     public void run(Key k, Key kStar, String publicKeyJson, String outputDirectory, DseDB.Configuration dseConf,
-        List<String> inputs) throws AppException {
+        List<String> inputs, boolean kafka, int maxSizeInMB, int maxAgeInSeconds, boolean dropIndexes)
+        throws AppException {
 
         benchmarks.startRecording("total_time");
         benchmarks.startRecording("init");
@@ -49,7 +47,7 @@ public class StandaloneInjector implements Injector {
         }
 
         // Pre-process the access to the output directory
-        OutputDirectory output = OutputDirectory.parse(outputDirectory);
+        OutputDirectory outputDir = OutputDirectory.parse(outputDirectory);
 
         // cache the encryption key for efficiency
         int cacheHandle;
@@ -63,7 +61,9 @@ public class StandaloneInjector implements Injector {
         }
 
         // truncate the DSE Index Tables - you may want to remove this
-        SseUpserter.truncate(dseConf);
+        if (dropIndexes) {
+            SseUpserter.truncate(dseConf);
+        }
 
         // done with init - now start processing records
         benchmarks.stopRecording("init", 1);
@@ -71,35 +71,16 @@ public class StandaloneInjector implements Injector {
 
         Optional<Benchmarks> doBench = Optional.of(benchmarks);
         long numRecords = 0;
-        try (SseUpserter sseUpserter = new SseUpserter(k, kStar, dseConf, Optional.of(benchmarks))) {
-
-            for (String inputPathString : inputs) {
-                InputPath inputPath = InputPath.parse(inputPathString);
-                Iterator<String> it = inputPath.listFiles();
-                while (it.hasNext()) {
-                    String inputFile = it.next();
-                    try {
-
-                        InputStream is = inputPath.getFs().getInputStream(inputFile);
-
-                        try (BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
-                            String line;
-                            while ((line = br.readLine()) != null) {
-                                if (line.trim().length() == 0) {
-                                    continue;
-                                }
-                                numRecords += 1;
-                                RecordInjector.process(line, md, sseUpserter, cacheHandle, doBench, output);
-                            }
-                        } catch (IOException e) {
-                            throw new AppException("an /IO Error occurred:" + e.getMessage(), e);
-                        }
-
-                    } catch (AppException e) {
-                        logger.severe("Aborting processing of the file: " + inputFile + ": " + e.getMessage());
-                    }
-                }
+        try (SseUpserter sseUpserter = new SseUpserter(k, kStar, dseConf, Optional.of(benchmarks));
+            LineReader reader = kafka ? new KafkaLineReader(inputs) : new FilesLineReader(inputs);
+            OutputFile outputFile = new OutputFile(outputDir, maxSizeInMB, maxAgeInSeconds)) {
+            String line;
+            while ((line = reader.readNext()) != null) {
+                numRecords += 1;
+                RecordInjector.process(line, md, sseUpserter, cacheHandle, doBench, outputFile);
             }
+        } catch (IOException e) {
+            logger.warning("Failed closing the input reader: " + e.getMessage());
         } finally {
             // The cache should be destroyed to reclaim memory
             benchmarks.stopRecording("record_process_time", numRecords);
@@ -147,9 +128,9 @@ public class StandaloneInjector implements Injector {
             builder.append("  - attributes enc.: ").append(record_attributes_encryption).append("ms (")
                 .append(String.format("%,.2f", record_attributes_encryption / record_total * 100.0)).append("%)\n");
 
-            double record_bzip = benchmarks.getAverage("bzip") / 1000.0;
-            builder.append("  - bzip.: ").append(record_bzip).append("ms (")
-                .append(String.format("%,.2f", record_bzip / record_total * 100.0)).append("%)\n");
+            // double record_bzip = benchmarks.getAverage("bzip") / 1000.0;
+            // builder.append(" - bzip.: ").append(record_bzip).append("ms (")
+            // .append(String.format("%,.2f", record_bzip / record_total * 100.0)).append("%)\n");
 
             double record_symmetric_encryption = benchmarks.getAverage("record_block") / 1000.0;
             builder.append("  - symmetric enc.: ").append(record_symmetric_encryption).append("ms (")

@@ -16,9 +16,8 @@ import org.json.JSONObject;
 
 import com.cosmian.CosmianException;
 import com.cosmian.cloudproof_demo.AppException;
-import com.cosmian.cloudproof_demo.Base58;
 import com.cosmian.cloudproof_demo.Benchmarks;
-import com.cosmian.cloudproof_demo.fs.OutputDirectory;
+import com.cosmian.cloudproof_demo.RecordUid;
 import com.cosmian.cloudproof_demo.policy.Country;
 import com.cosmian.cloudproof_demo.policy.Department;
 import com.cosmian.cloudproof_demo.sse.Sse.Word;
@@ -38,16 +37,17 @@ public class RecordInjector {
     /**
      * Process the record, returning its uid
      */
-    public static byte[] process(String line, MessageDigest sha256, SseUpserter sseUpserter, int encryptionCache,
-        Optional<Benchmarks> benchmarks, OutputDirectory output) throws AppException {
+    public static RecordUid process(String line, MessageDigest sha256, SseUpserter sseUpserter, int encryptionCache,
+        Optional<Benchmarks> benchmarks, OutputFile outputFile) throws AppException {
 
         if (benchmarks.isPresent()) {
             benchmarks.get().startRecording("record_total");
             benchmarks.get().startRecording("record_pre_processing");
         }
 
-        byte[] lineBytes = line.getBytes(StandardCharsets.UTF_8);
-        byte[] hash = sha256.digest(lineBytes);
+        RecordUid recordUid = outputFile.nextRecordUid();
+        logger.finer(() -> "Encryption: record UID: " + recordUid.filename + " :: " + recordUid.mark);
+        byte[] uid = recordUid.toBytes();
 
         // recover data for indexing and attributes encryption
         JSONObject json = new JSONObject(line);
@@ -64,7 +64,7 @@ public class RecordInjector {
             benchmarks.get().stopRecording("record_pre_processing", 1);
 
         // Indexing
-        sseUpserter.upsert(hash, set);
+        sseUpserter.upsert(uid, set);
 
         if (benchmarks.isPresent())
             benchmarks.get().startRecording("record_attributes_encryption");
@@ -84,15 +84,15 @@ public class RecordInjector {
             common_json.put("firstName", json.getString("firstName"));
             common_json.put("lastName", json.getString("lastName"));
             common_json.put("country", country);
-            encryptPart(bao, encryptionCache, common_attributes, hash,
-                common_json.toString().getBytes(StandardCharsets.UTF_8));
+            byte[] commonBytes = common_json.toString().getBytes(StandardCharsets.UTF_8);
+            encryptPart(bao, encryptionCache, common_attributes, uid, commonBytes);
 
             // marketing part of the file
             Attr[] mkg_attributes = new Attr[] {country_attribute, Department.Marketing.getAttribute()};
             // we want all but employeeNumber and security
             JSONObject mkg_json = new JSONObject();
             mkg_json.put("region", json.getString("region"));
-            encryptPart(bao, encryptionCache, mkg_attributes, hash,
+            encryptPart(bao, encryptionCache, mkg_attributes, uid,
                 mkg_json.toString().getBytes(StandardCharsets.UTF_8));
 
             // HR part of the file
@@ -101,13 +101,13 @@ public class RecordInjector {
             hr_json.put("phone", json.getString("phone"));
             hr_json.put("email", json.getString("email"));
             hr_json.put("employeeNumber", json.getString("employeeNumber"));
-            encryptPart(bao, encryptionCache, hr_attributes, hash, hr_json.toString().getBytes(StandardCharsets.UTF_8));
+            encryptPart(bao, encryptionCache, hr_attributes, uid, hr_json.toString().getBytes(StandardCharsets.UTF_8));
 
             // security part of the file
             Attr[] security_attributes = new Attr[] {country_attribute, Department.Security.getAttribute()}; // marketing
             JSONObject security_json = new JSONObject();
             security_json.put("security", json.getString("security"));
-            encryptPart(bao, encryptionCache, security_attributes, hash,
+            encryptPart(bao, encryptionCache, security_attributes, uid,
                 security_json.toString().getBytes(StandardCharsets.UTF_8));
 
         } catch (CosmianException e) {
@@ -119,18 +119,18 @@ public class RecordInjector {
             benchmarks.get().startRecording("record_write");
         }
 
-        String encryptedFileName = Base58.encode(hash);
-        output.getFs().writeFile(output.getDirectory().resolve(encryptedFileName).toString(), bao.toByteArray());
+        // write the result
+        outputFile.write(bao.toByteArray());
 
         if (benchmarks.isPresent()) {
             benchmarks.get().stopRecording("record_write", 1);
             benchmarks.get().stopRecording("record_total", 1);
         }
 
-        logger.fine(() -> "Injected:" + encryptedFileName + " with country: " + country_attribute.toString()
+        logger.fine(() -> "Injected:" + recordUid + " with country: " + country_attribute.toString()
             + ", indexed values: " + Arrays.toString(indexedValues));
 
-        return hash;
+        return recordUid;
     }
 
     static void encryptPart(ByteArrayOutputStream bao, int encryptionCache, Attr[] attributes, byte[] hash,
@@ -149,8 +149,8 @@ public class RecordInjector {
         }
 
         // The size of the header as an int in BE bytes
-        ByteBuffer headerSize =
-            ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(encryptedHeader.getEncryptedHeaderBytes().length);
+        int headerLength = encryptedHeader.getEncryptedHeaderBytes().length;
+        ByteBuffer headerSize = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(headerLength);
         // The size of the header as an int in BE bytes
         ByteBuffer blockSize = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putInt(encryptedBlock.length);
 
@@ -164,6 +164,9 @@ public class RecordInjector {
         } catch (IOException e) {
             throw new AppException("Failed to write the encrypted bytes: " + e.getMessage(), e);
         }
+
+        logger.finer(() -> "Encrypted part with attributes: " + Arrays.toString(attributes) + ", header length: "
+            + headerLength);
     }
 
 }

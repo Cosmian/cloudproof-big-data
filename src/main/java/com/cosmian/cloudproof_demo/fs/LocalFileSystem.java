@@ -1,5 +1,6 @@
 package com.cosmian.cloudproof_demo.fs;
 
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -70,10 +71,10 @@ public class LocalFileSystem implements AppFileSystem {
     }
 
     @Override
-    public InputStream getInputStream(String filePath) throws AppException {
+    public DataInputStream getInputStream(String filePath) throws AppException {
         Path path = Paths.get(filePath);
         try {
-            return new FileInputStream(path.toFile());
+            return new DataInputStream(new FileInputStream(path.toFile()));
         } catch (FileNotFoundException e) {
             throw new AppException("failed reading: " + path.toString() + ": file not found", e);
         }

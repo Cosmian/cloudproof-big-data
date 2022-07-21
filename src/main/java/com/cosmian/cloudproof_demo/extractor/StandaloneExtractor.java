@@ -1,18 +1,20 @@
 package com.cosmian.cloudproof_demo.extractor;
 
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.cosmian.CosmianException;
 import com.cosmian.cloudproof_demo.AppException;
-import com.cosmian.cloudproof_demo.Base58;
 import com.cosmian.cloudproof_demo.Benchmarks;
+import com.cosmian.cloudproof_demo.RecordUid;
 import com.cosmian.cloudproof_demo.fs.AppFileSystem;
 import com.cosmian.cloudproof_demo.fs.InputPath;
 import com.cosmian.cloudproof_demo.fs.OutputDirectory;
@@ -64,16 +66,12 @@ public class StandaloneExtractor implements Extractor {
                 Iterator<String> filePaths = inputPath.listFiles();
 
                 while (filePaths.hasNext()) {
-                    benchmarks.startRecording("record_total");
                     String filePath = filePaths.next();
-                    long time = decryptAtPath(decryptionCache, os, inputPath.getFs(), filePath);
-                    if (time > 0) {
-                        benchmarks.record("decryption", 1, time);
-                        numEntries += 1;
-                        benchmarks.stopRecording("record_total", 1);
-                    }
+                    benchmarks.startRecording("record_total");
+                    long numRecords = decryptAtPath(decryptionCache, os, inputPath.getFs(), filePath, benchmarks);
+                    benchmarks.stopRecording("record_total", numRecords);
+                    numEntries += numRecords;
                 }
-
                 allEntries += numEntries;
             }
         } catch (IOException e) {
@@ -92,41 +90,109 @@ public class StandaloneExtractor implements Extractor {
     }
 
     /**
-     * Attempt to decrypt the file at the absolute path of the given fs and write the result to os
+     * Attempt to decrypt all records of the file at the absolute path of the given fs and write the result to os
      * 
      * @param decryptionCache
      * @param os
      * @param fs
      * @param absolutePath
-     * @return 0 if the decryption failed, the decryption time in milliseconds otherwise
+     * @return the number of decrypted records
      */
-    static public long decryptAtPath(int decryptionCache, OutputStream os, AppFileSystem fs, String absolutePath) {
+    static public int decryptAtPath(int decryptionCache, OutputStream os, AppFileSystem fs, String absolutePath,
+        Benchmarks benchmarks) {
 
-        long decryptionTime = 0;
-        byte[] uid = Base58.decode(Paths.get(absolutePath).getFileName().toString());
+        String filename = Paths.get(absolutePath).getFileName().toString();
+        int mark = 0;
+        int numRecords = 0;
 
-        try {
-            byte[] encryptedBytes = fs.readFile(absolutePath);
-            // Measure decryption time (quick and dirt - need a micro benchmark tool to do
-            // this properly)
-            final long encryptionThen = System.nanoTime();
-            byte[] clearText = RecordExtractor.process(decryptionCache, uid, encryptedBytes);
-            decryptionTime = TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - encryptionThen);
-            // Write the result
-            try {
-                os.write(clearText);
-                os.write('\n');
-            } catch (IOException e) {
-                throw new AppException("failed writing results: " + e.getMessage(), e);
+        try (DataInputStream is = fs.getInputStream(absolutePath)) {
+
+            while (true) {
+
+                RecordUid uid = new RecordUid(filename, mark);
+                RecordExtractor.Record record =
+                    RecordExtractor.readNext(decryptionCache, uid, is, Optional.of(benchmarks));
+                if (record.encryptedLength == 0) {
+                    // eof
+                    return numRecords;
+                }
+                mark += record.encryptedLength;
+
+                // Write the result
+                try {
+                    os.write(record.clearText);
+                    os.write('\n');
+                } catch (IOException e) {
+                    throw new AppException("failed writing results: " + e.getMessage(), e);
+                }
+                numRecords += 1;
+                if (logger.isLoggable(Level.FINE)) {
+                    logger.fine("successfully decrypted record #" + numRecords + " at: " + absolutePath);
+                }
             }
-            if (logger.isLoggable(Level.FINE)) {
-                logger.finer(() -> "successfully decrypted: " + absolutePath);
-            }
+        } catch (IOException e) {
+            logger.severe(
+                "decrypt: unable to read from file: " + absolutePath + ", error: " + e.getMessage() + ". skipping");
         } catch (AppException e) {
             logger.fine(() -> "Skipping process of the file: " + absolutePath + ": " + e.getMessage());
-            decryptionTime = 0;
         }
-        return decryptionTime;
+        return numRecords;
+    }
+
+    static public long decryptAtPathAndPositions(int decryptionCache, OutputStream os, InputPath fsRootPath,
+        String filename, List<Long> positions, Benchmarks benchmarks) {
+
+        int numRecords = 0;
+        String absolutePath = fsRootPath.resolve(filename);
+
+        positions.sort(Comparator.naturalOrder());
+
+        try (DataInputStream is = fsRootPath.getFs().getInputStream(absolutePath)) {
+
+            long previousMark = 0;
+            for (long mark : positions) {
+
+                RecordUid recordUid = new RecordUid(filename, mark);
+
+                long currentSkip = mark - previousMark;
+                logger.fine(() -> "Extracting " + recordUid + ": jumping: " + currentSkip);
+                long skipped = is.skip(currentSkip);
+                if (skipped != currentSkip) {
+                    throw new AppException("Expected to skip: " + currentSkip + " bytes, actual: " + skipped);
+                }
+
+                RecordExtractor.Record record;
+                try {
+                    record = RecordExtractor.readNext(decryptionCache, recordUid, is, Optional.of(benchmarks));
+                } catch (AppException e) {
+                    logger.fine(() -> "Skipping process of the file: " + absolutePath + ": " + e.getMessage());
+                    continue;
+                }
+                if (record.encryptedLength == 0) {
+                    // eof
+                    return numRecords;
+                }
+                previousMark = mark + record.encryptedLength;
+
+                // Write the result
+                try {
+                    os.write(record.clearText);
+                    os.write('\n');
+                } catch (IOException e) {
+                    logger.severe("failed writing results: " + e.getMessage());
+                    return numRecords;
+                }
+                numRecords += 1;
+                if (logger.isLoggable(Level.FINE)) {
+                    logger.fine("successfully decrypted record #" + numRecords + " at: " + absolutePath);
+                }
+            }
+
+        } catch (IOException | AppException e) {
+            logger.severe(
+                "decrypt: unable to read from file: " + absolutePath + ", error: " + e.getMessage() + ". skipping");
+        }
+        return numRecords;
     }
 
     static void logBenchmarks(Benchmarks benchmarks) {
@@ -136,19 +202,35 @@ public class StandaloneExtractor implements Extractor {
             long total_time = (long) benchmarks.getSum("total_time");
 
             builder.append("Decrypted ").append(String.format("%,d", total_records)).append(" records in ")
-                .append(String.format("%,d", total_time / 1000)).append("ms (init: ")
-                .append(String.format("%,.1f", benchmarks.getSum("init") / total_time * 100.0))
-                .append("%, processing: ")
+                .append(String.format("%,d", total_time / 1000)).append("ms\n");
+
+            builder.append("  - init: ").append(String.format("%,.3f", benchmarks.getSum("init") / 1000)).append("ms (")
+                .append(String.format("%,.1f", benchmarks.getSum("init") / total_time * 100.0)).append("%)\n");
+
+            builder.append("  - hybrid decryption: ")
+                .append(String.format("%,.3f", benchmarks.getSum("record_process_time") / 1000)).append("ms (")
                 .append(String.format("%,.1f", benchmarks.getSum("record_process_time") / total_time * 100.0))
                 .append("%)\n");
 
             double record_total = benchmarks.getAverage("record_total") / 1000.0;
-            builder.append("Average processing time per decrypted record : ")
-                .append(String.format("%,.3f", record_total)).append("ms");
+            builder.append("Average processing time per decrypted record (excl. reading) : ")
+                .append(String.format("%,.3f", record_total)).append("ms\n");
 
-            double record_decryption = benchmarks.getAverage("decryption") / 1000.0;
-            builder.append(", hybrid decryption: ").append(record_decryption).append("ms (")
-                .append(String.format("%,.2f", record_decryption / record_total * 100.0)).append("%)\n");
+            double record_attributes_decryption = benchmarks.getAverage("record_attributes_decryption") / 1000.0;
+            builder.append("  - attributes dec.: ").append(record_attributes_decryption).append("ms (")
+                .append(String.format("%,.2f", record_attributes_decryption / record_total * 100.0)).append("%)\n");
+
+            double record_bzip = benchmarks.getAverage("bzip") / 1000.0;
+            builder.append("  - bzip.: ").append(record_bzip).append("ms (")
+                .append(String.format("%,.2f", record_bzip / record_total * 100.0)).append("%)\n");
+
+            double record_symmetric_decryption = benchmarks.getAverage("record_block") / 1000.0;
+            builder.append("  - symmetric dec.: ").append(record_symmetric_decryption).append("ms (")
+                .append(String.format("%,.2f", record_symmetric_decryption / record_total * 100.0)).append("%)\n");
+
+            double other = record_total - record_attributes_decryption - record_bzip - record_symmetric_decryption;
+            builder.append("  - other ( mostly I/O): ").append(String.format("%,.3f", other)).append("ms (")
+                .append(String.format("%,.2f", other / record_total * 100.0)).append("%)\n");
 
             return builder.toString();
         });

@@ -50,7 +50,7 @@ public class SparkExtractor implements Extractor {
                 String path = Spark.setHadoopConf(spark, inputPathUri);
                 JavaPairRDD<String, PortableDataStream> rdds = spark.binaryFiles(path + "/*");
                 rdds.foreachPartition(
-                    new SparkExtractionProcess(privateKeyJson, outputDirectory, clearTextFilename, counter));
+                    new SparkExtractAllProcess(privateKeyJson, outputDirectory, clearTextFilename, counter));
                 allEntries += counter.value();
             }
         } finally {

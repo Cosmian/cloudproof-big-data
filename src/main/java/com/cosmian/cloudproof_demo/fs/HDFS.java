@@ -1,8 +1,8 @@
 package com.cosmian.cloudproof_demo.fs;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Paths;
 import java.security.PrivilegedExceptionAction;
@@ -210,11 +210,11 @@ public class HDFS implements AppFileSystem {
     }
 
     @Override
-    public InputStream getInputStream(String filePath) throws AppException {
+    public DataInputStream getInputStream(String filePath) throws AppException {
         try {
-            return ugi.doAs(new PrivilegedExceptionAction<InputStream>() {
+            return ugi.doAs(new PrivilegedExceptionAction<DataInputStream>() {
 
-                public InputStream run() throws Exception {
+                public DataInputStream run() throws Exception {
 
                     FileSystem fs;
                     try {

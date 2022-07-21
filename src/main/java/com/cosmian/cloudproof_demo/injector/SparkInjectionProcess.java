@@ -12,6 +12,7 @@ import org.apache.spark.util.LongAccumulator;
 import com.cosmian.CosmianException;
 import com.cosmian.cloudproof_demo.AppException;
 import com.cosmian.cloudproof_demo.DseDB;
+import com.cosmian.cloudproof_demo.RecordUid;
 import com.cosmian.cloudproof_demo.fs.OutputDirectory;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.SseUpserter;
@@ -35,14 +36,20 @@ class SparkInjectionProcess implements VoidFunction<Iterator<String>> {
 
     private final LongAccumulator counter;
 
+    private final int maxSizeInMB;
+
+    private final int maxAgeInSeconds;
+
     public SparkInjectionProcess(Key k, Key kStar, String publicKeyJson, DseDB.Configuration dseConf,
-        String outputDirectory, LongAccumulator counter) {
+        String outputDirectory, LongAccumulator counter, int maxSizeInMB, int maxAgeInSeconds) {
         this.k = k;
         this.kStar = kStar;
         this.dseConf = dseConf;
         this.outputDirectory = outputDirectory;
         this.publicKeyJson = publicKeyJson;
         this.counter = counter;
+        this.maxSizeInMB = maxSizeInMB;
+        this.maxAgeInSeconds = maxAgeInSeconds;
     }
 
     public void call(Iterator<String> iter) throws AppException {
@@ -54,7 +61,7 @@ class SparkInjectionProcess implements VoidFunction<Iterator<String>> {
             throw new AppException("Sha 256 is not supported on this machine; cannot continue");
         }
 
-        OutputDirectory output = OutputDirectory.parse(outputDirectory);
+        OutputDirectory outputDir = OutputDirectory.parse(outputDirectory);
 
         int encryptionCacheHandle;
         try {
@@ -66,13 +73,15 @@ class SparkInjectionProcess implements VoidFunction<Iterator<String>> {
             throw new AppException("Failed creating the encryption cache:" + e.getMessage(), e);
         }
 
-        try (SseUpserter sseUpserter = new SseUpserter(k, kStar, dseConf, Optional.empty())) {
+        try (SseUpserter sseUpserter = new SseUpserter(k, kStar, dseConf, Optional.empty());
+            OutputFile outputFile = new OutputFile(outputDir, maxSizeInMB, maxAgeInSeconds)) {
             while (iter.hasNext()) {
-                byte[] uid = RecordInjector.process(iter.next(), sha256, sseUpserter, encryptionCacheHandle,
-                    Optional.empty(), output);
-                if (uid != null) {
+                RecordUid recordUid = RecordInjector.process(iter.next(), sha256, sseUpserter, encryptionCacheHandle,
+                    Optional.empty(), outputFile);
+                if (recordUid != null) {
                     counter.add(1);
                 }
+                logger.fine(() -> "Encrypted: " + recordUid);
             }
         } finally {
             try {

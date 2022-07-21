@@ -1,8 +1,8 @@
 package com.cosmian.cloudproof_demo.fs;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Paths;
 import java.util.Iterator;
@@ -174,7 +174,7 @@ public class HDFSKerberos implements AppFileSystem {
     }
 
     @Override
-    public InputStream getInputStream(String filePath) throws AppException {
+    public DataInputStream getInputStream(String filePath) throws AppException {
         try {
             FileSystem fs;
             try {

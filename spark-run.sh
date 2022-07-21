@@ -12,4 +12,4 @@ fi
 $SPARK_HOME/bin/spark-submit \
     --class com.cosmian.cloudproof_demo.Spark \
     --master local[*] \
-    target/cloudproof-demo-2.0.0.jar $@
+    target/cloudproof-demo-3.0.0.jar $@

@@ -51,7 +51,7 @@ public class AppTest {
         App.configureLog4j();
         App.initLogging(Level.INFO);
         final Logger logger = Logger.getLogger("com.cosmian.cloudproof_demo");
-        logger.setLevel(Level.FINE);
+        logger.setLevel(Level.FINER);
     }
 
     @Test
@@ -76,6 +76,8 @@ public class AppTest {
 
     @Test
     public void testApp() throws Exception {
+        before_all();
+
         Path resourcesPath = Paths.get("").toAbsolutePath().resolve("src/test/resources");
 
         if (TestUtils.serverAvailable(TestUtils.kmsServerUrl())) {
@@ -101,7 +103,7 @@ public class AppTest {
 
         // encryption
         new StandaloneInjector().run(k, kStar, publicKeyJson, encryptedOutputDirectory.toString(),
-            new DseDB.Configuration(), inputs);
+            new DseDB.Configuration(), inputs, false, Integer.MAX_VALUE, Integer.MAX_VALUE, true);
 
         String encryptedFileName =
             Stream.of(new File(encryptedOutputDirectory.toString()).listFiles()).map(File::getName).findFirst().get();
@@ -120,7 +122,7 @@ public class AppTest {
         List<String> encryptedInputs = Arrays.asList(new String[] {encryptedInputFile.toString()});
         long totalEntries = new StandaloneExtractor().run(encryptedInputs, privateKeyJson,
             decryptedOutputDirectory.toString(), "CT-" + encryptedFileName);
-        assertEquals(1, totalEntries);
+        assertEquals(2, totalEntries);
 
         // search
         String[] wordsList = new String[] {"country=France"};

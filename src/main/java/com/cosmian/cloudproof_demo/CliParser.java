@@ -1,14 +1,15 @@
 package com.cosmian.cloudproof_demo;
 
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 
 import org.apache.commons.cli.BasicParser;
@@ -23,6 +24,7 @@ import com.cosmian.CosmianException;
 import com.cosmian.cloudproof_demo.extractor.Extractor;
 import com.cosmian.cloudproof_demo.fs.LocalFileSystem;
 import com.cosmian.cloudproof_demo.injector.Injector;
+import com.cosmian.cloudproof_demo.injector.KafkaLoader;
 import com.cosmian.cloudproof_demo.search.Search;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.Sse.Word;
@@ -43,6 +45,36 @@ public class CliParser {
             cli = new BasicParser().parse(cliOptions, args);
         } catch (ParseException e) {
             printUsage();
+            return;
+        }
+
+        if (cli.hasOption("load-topic")) {
+
+            // try reading kafka.properties file
+            Properties props = new Properties();
+            try {
+                props.load(new FileReader("./kafka.properties"));
+                System.out.println(props);
+            } catch (IOException e) {
+                throw new AppException("Unable to load the kafka.properties files: " + e.getMessage(), e);
+            }
+
+            @SuppressWarnings("unchecked")
+            List<String> fileNames = cli.getArgList();
+            if (fileNames.size() == 0) {
+                throw new AppException("Please supply at least one file/directory to encrypt");
+            }
+            for (String fileName : fileNames) {
+                Path file = Paths.get(fileName);
+                if (!Files.exists(file)) {
+                    throw new AppException("The data file/directory: " + fileName + " does not exists");
+                }
+                if (!Files.isReadable(file)) {
+                    throw new AppException("The data file/directory: " + fileName + " is not readable");
+                }
+            }
+
+            new KafkaLoader(props, fileNames).run();
             return;
         }
 
@@ -85,6 +117,16 @@ public class CliParser {
         DseDB.Configuration dseConf =
             new DseDB.Configuration(dseIP, dsePort, dseDatacenter, dseUsername, dsePassword, dseKeyspace);
 
+        int maxSizeInMB = Integer.MAX_VALUE;
+        if (cli.hasOption("max-size")) {
+            maxSizeInMB = Integer.parseInt(cli.getOptionValue("max-size"), 10);
+        }
+
+        int maxAgeInSeconds = Integer.MAX_VALUE;
+        if (cli.hasOption("max-age")) {
+            maxAgeInSeconds = Integer.parseInt(cli.getOptionValue("max-age"), 10);
+        }
+
         String keyString = "key.json";
         if (cli.hasOption("key")) {
             keyString = cli.getOptionValue("key");
@@ -117,34 +159,40 @@ public class CliParser {
 
         if (cli.hasOption("encrypt")) {
             Path keysDirectory = abKey.getParent();
-
+            // load the Findex symmetric keys
             Key k = k(keysDirectory);
             Key kStar = kStar(keysDirectory);
-
+            // load the attributes encryption public key
             String publicKeyJson;
             try {
                 publicKeyJson = LocalResource.load_file_string(abKey.toFile());
             } catch (IOException e) {
                 throw new AppException("Failed loading the public key file:" + e.getMessage(), e);
             }
-
+            // should the program drop the indexes first ?
+            boolean dropIndexes = cli.hasOption("drop-indexes");
+            // are the inputs kafka topics ?
+            boolean kafkaTopics = cli.hasOption("kafka");
+            // recover the inputs
             @SuppressWarnings("unchecked")
-            List<String> fileNames = cli.getArgList();
-            if (fileNames.size() == 0) {
-                throw new AppException("Please supply at least one file/directory to encrypt");
+            List<String> inputs = cli.getArgList();
+            if (inputs.size() == 0) {
+                throw new AppException("Please supply at least one input (file or kafka topic) to encrypt");
             }
-            List<Path> files = new ArrayList<>();
-            for (String fileName : fileNames) {
-                Path file = Paths.get(fileName);
-                if (!Files.exists(file)) {
-                    throw new AppException("The data file/directory: " + fileName + " does not exists");
+            // if files, check that they exists
+            if (!kafkaTopics) {
+                for (String fileName : inputs) {
+                    Path file = Paths.get(fileName);
+                    if (!Files.exists(file)) {
+                        throw new AppException("The data file/directory: " + fileName + " does not exists");
+                    }
+                    if (!Files.isReadable(file)) {
+                        throw new AppException("The data file/directory: " + fileName + " is not readable");
+                    }
                 }
-                if (!Files.isReadable(file)) {
-                    throw new AppException("The data file/directory: " + fileName + " is not readable");
-                }
-                files.add(file);
             }
-            injector.run(k, kStar, publicKeyJson, outputDirString, dseConf, fileNames);
+            injector.run(k, kStar, publicKeyJson, outputDirString, dseConf, inputs, kafkaTopics, maxSizeInMB,
+                maxAgeInSeconds, dropIndexes);
         }
 
         if (cli.hasOption("decrypt")) {
@@ -190,7 +238,7 @@ public class CliParser {
             }
             Set<Word> words = new HashSet<>();
             for (int i = 1; i < argsList.size(); i++) {
-                words.add(new Word(argsList.get(i).toLowerCase().getBytes(StandardCharsets.UTF_8)));
+                words.add(new Word(argsList.get(i).toUpperCase().getBytes(StandardCharsets.UTF_8)));
             }
             search.run(words, disjunction, fsRootUri, k, privateKeyJson, dseConf, outputDirString, clearTextFilename);
             return;
@@ -206,6 +254,7 @@ public class CliParser {
         group.addOption(new Option("e", "encrypt", false, "encrypt the supplied files and directories URI(s)"));
         group.addOption(new Option("d", "decrypt", false, "decrypt the supplied files and directories URI(s)"));
         group.addOption(new Option("s", "search", false, "search the supplied root URI for the words"));
+        group.addOption(new Option("l", "load-topic", false, "load a kafka topic with data"));
         options.addOptionGroup(group);
         options.addOption(new Option("or", "disjunction", false,
             "run a disjunction (OR) between the search words. Defaults to conjunction (AND)"));
@@ -218,12 +267,21 @@ public class CliParser {
         options.addOption(new Option("dp", "dse-port", true, "the port of the DSE server. Defaults to 9042"));
         options.addOption(new Option("dc", "dse-datacenter", true,
             "the datacenter of the DSE server. Defaults to NULL or dc1 if the IP is 127.0.0.1"));
-        options.addOption(new Option("dk", "dse-keyspace", true,
-            "the keyspace to use for the tables. Defaults to NULL in which case th program will attempt to create the cosmian_sse keyspace"));
+        options.addOption(
+            new Option("dk", "dse-keyspace", true, "the keyspace to use for the tables. Defaults to cosmian_sse"));
         options.addOption(
             new Option("du", "dse-username", true, "the username to connect to the DSE server. Defaults to NULL"));
         options.addOption(
             new Option("dup", "dse-password", true, "the password to connect to the DSE server. Defaults to NULL"));
+        options.addOption(new Option("ms", "max-size", true,
+            "the maximum size in mega bytes of an encrypted file before it rolls over to a new file. Defaults to MAX_INT (2 147 483 647)"));
+        options.addOption(new Option("ma", "max-age", true,
+            "the maximum age in seconds of an encrypted file before it rolls over to a new file. Defaults to MAX_INT (2 147 483 647)"));
+        options.addOption(
+            new Option("zi", "drop-indexes", false, "drop the indexes before running the injector (i.e. --encrypt)"));
+        options
+            .addOption(new Option("kt", "kafka", false, "when encrypting the list of passed input are kafka topics"));
+
         return options;
     }
 
@@ -232,7 +290,7 @@ public class CliParser {
         formatter.printHelp("usage: app SUB-COMMAND [OPTIONS] [SOURCE URI] [WORD1, WORD2,...]", cliOptions());
     }
 
-    public static Key k(Path keysDirectory) throws AppException {
+    static Key k(Path keysDirectory) throws AppException {
         LocalFileSystem fs = new LocalFileSystem();
         File kFile = keysDirectory.resolve(KeyGenerator.SSE_K_KEY_FILENAME).toFile();
         if (!kFile.exists()) {
@@ -244,7 +302,7 @@ public class CliParser {
         return new Key(fs.readFile(kFile));
     }
 
-    public static Key kStar(Path keysDirectory) throws AppException {
+    static Key kStar(Path keysDirectory) throws AppException {
         LocalFileSystem fs = new LocalFileSystem();
         File kStarFile = keysDirectory.resolve(KeyGenerator.SSE_K_STAR_KEY_FILENAME).toFile();
         if (!kStarFile.exists()) {
