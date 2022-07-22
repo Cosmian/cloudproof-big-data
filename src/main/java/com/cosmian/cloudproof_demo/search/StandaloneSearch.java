@@ -32,6 +32,8 @@ public class StandaloneSearch implements Search {
     public long[] run(Set<Word> words, boolean disjunction, String fsRootUri, Key k, String privateKeyJson,
         DseDB.Configuration dseConf, String outputDirectory, String cleartextFilename) throws AppException {
 
+        logger.finer(() -> "Searching words: " + words);
+
         benchmarks.startRecording("total_time");
         benchmarks.startRecording("sse");
 

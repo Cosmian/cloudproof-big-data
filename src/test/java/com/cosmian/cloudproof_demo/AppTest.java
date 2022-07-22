@@ -97,7 +97,7 @@ public class AppTest {
         Key k = CliParser.k(publicKeyFile.getParent());
         Key kStar = CliParser.kStar(publicKeyFile.getParent());
 
-        Path inputFile = resourcesPath.resolve("line.txt");
+        Path inputFile = resourcesPath.resolve("lines.txt");
         List<String> inputs = Arrays.asList(new String[] {inputFile.toString()});
         Path encryptedOutputDirectory = Files.createTempDirectory(null);
 
@@ -127,14 +127,14 @@ public class AppTest {
         // search
         String[] wordsList = new String[] {"country=France"};
         Set<Word> words = new HashSet<Word>();
-        for (int i = 1; i < wordsList.length; i++) {
+        for (int i = 0; i < wordsList.length; i++) {
             words.add(new Word(wordsList[i].toLowerCase().getBytes(StandardCharsets.UTF_8)));
         }
         long[] results = new StandaloneSearch().run(words, false, encryptedOutputDirectory.toString(), k,
             privateKeyJson, new DseDB.Configuration(), decryptedOutputDirectory.toString(), "SE-" + encryptedFileName);
 
-        assertEquals(1, results[0], "should have found 1 entry");
-        assertEquals(1, results[1], "should have decrypted 1 entry");
+        assertEquals(2, results[0], "should have found 1 entry");
+        assertEquals(2, results[1], "should have decrypted 1 entry");
 
     }
 

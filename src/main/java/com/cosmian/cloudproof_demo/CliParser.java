@@ -238,7 +238,7 @@ public class CliParser {
             }
             Set<Word> words = new HashSet<>();
             for (int i = 1; i < argsList.size(); i++) {
-                words.add(new Word(argsList.get(i).toUpperCase().getBytes(StandardCharsets.UTF_8)));
+                words.add(new Word(argsList.get(i).toLowerCase().getBytes(StandardCharsets.UTF_8)));
             }
             search.run(words, disjunction, fsRootUri, k, privateKeyJson, dseConf, outputDirString, clearTextFilename);
             return;

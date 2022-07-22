@@ -493,6 +493,7 @@ public class Sse {
 
             // update the entry table
             entryTableUpdates.put(wordHash, entryTableValue.toRecord(k2));
+            logger.fine(() -> "SSE: added entry table entry: " + wordHash.toString());
         }
 
         cryptoTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenCrypto2);
@@ -594,9 +595,12 @@ public class Sse {
         Key k1 = Key.derive(k, K1_SALT);
         Key k2 = Key.derive(k, K2_SALT);
 
+        logger.finer(() -> "SSE: searching " + words.size() + " word: " + Arrays.toString(words.toArray()));
         HashMap<WordHash, Word> wordHashToWord = new HashMap<>();
         for (Word wi : words) {
-            wordHashToWord.put(wi.hash(k1.bytes), wi);
+            WordHash wh = wi.hash(k1.bytes);
+            logger.finer(() -> "SSE: searching word: " + wh.toString());
+            wordHashToWord.put(wh, wi);
         }
 
         HashMap<Word, Set<DbUid>> results = new HashMap<>();
