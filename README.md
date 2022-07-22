@@ -1,7 +1,6 @@
 <h1>Cloudproof for Big Data</h1>
 
-This repository provides a complete working big data application to encrypt and securely index a big data repository, 
-then perform secure searches and decryption using 
+This repository provides a complete working big data application to encrypt and securely index a big data repository, then perform secure searches and decryption according to access policies.
 
 This application shows: 
 
