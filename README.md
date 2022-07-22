@@ -1,36 +1,34 @@
-<h1>Cloudproof-java-demo</h1>
+<h1>Cloudproof for Big Data</h1>
 
-## Cloudproof encryption
+This repository provides a complete working big data application to encrypt and securely index a big data repository, 
+then perform secure searches and decryption using 
 
-Cloudproof provides encryption so that large repositories of data, and indexes 
- - can be safely stored encrypted with embedded policy attributes in the cloud then
- - quickly and confidentially searched using encrypted indexes and queries
- 
-Users can only decrypt data from partitions matching the access policy of their keys.
+This application shows: 
 
-At no time does the cloud learn anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
+ - fetching data
+    - directly from a file using a standalone Java app or Spark
+    - from a Kafka topic
+ - encrypted indexing and encrypting records with attributes using [Cloudproof cryptographic primitives](#cloudproof-encryption)
+ - writing the encrypted records to files hosted in a Hadoop Distributed File System (HDFS)
+ - encrypted search and decryption of authorized transaction from HDFS using private keys that hold various access policies, using either a the standalone java program or Spark.
 
-See the [documentation](https://docs.cosmian.com/cloudproof_encryption/use_cases_benefits/) for benefits, uses cases and technology details.
-
-This demo shows: 
-
- - encrypted indexing and encryption of records to a Hadoop Distributed File System (HDFS) using a public key and policy attributes.
- - encrypted search and decryption of authorized transaction from HDFS using a private key that holds an access policy.
-
-Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in this demo.
-
+The encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in this demo.
 
 
 <!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
 <!-- code_chunk_output -->
 
-- [Cloudproof encryption](#cloudproof-encryption)
 - [Flow Overview](#flow-overview)
-    - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
-    - [Attributes Based Encryption](#attributes-based-encryption)
-- [Policy](#policy)
-- [User Keys](#user-keys)
+- [Cloudproof encryption](#cloudproof-encryption)
+- [Running the application](#running-the-application)
+- [Customizing the application](#customizing-the-application)
+- [Example data: encrypting a large people directory](#example-data-encrypting-a-large-people-directory)
+  - [Input/output data](#inputoutput-data)
+  - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
+  - [Encrypting the data with labels](#encrypting-the-data-with-labels)
+  - [Policy](#policy)
+  - [User Keys](#user-keys)
 - [Software](#software)
   - [Example Usage](#example-usage)
     - [Encrypting](#encrypting)
@@ -40,7 +38,7 @@ Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in t
   - [main program: cloudproof-demo](#main-program-cloudproof-demo)
   - [CoverCrypt](#covercrypt)
   - [cosmian_java_lib](#cosmian_java_lib)
-- [Setup a test environment](#setup-a-test-environment)
+- [Setting-up a test environment](#setting-up-a-test-environment)
   - [Spark 2.4.8 Hadoop 2.7](#spark-248-hadoop-27)
   - [Kafka 2.7](#kafka-27)
   - [Cassandra DSE 5.1.20 and Hadoop HDFS 2.7.5](#cassandra-dse-5120-and-hadoop-hdfs-275)
@@ -51,14 +49,17 @@ Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in t
 <!-- /code_chunk_output -->
 
 
+
+
+
 ## Flow Overview
 
 Upserting
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
 graph LR
-    File[[File]] -- index --> DSE[(DSE)]
-    File[[File]] -- encrypt --> HDFS[(HDFS)]
+    File[[File/Kafka]] -- index --> DSE[(DSE)]
+    File[[File/Kafka]] -- encrypt --> HDFS[(HDFS)]
 ```
 
 Searching
@@ -73,7 +74,55 @@ graph LR
 
 
 
-**input/output file**
+## Cloudproof encryption
+
+Cloudproof provides encryption so that large repositories of data, and indexes 
+ - can be safely stored encrypted with embedded policy attributes in the cloud then
+ - quickly and confidentially searched using encrypted indexes and queries
+ 
+Users can only decrypt data from partitions matching the access policy of their keys.
+
+At no time does the cloud learn anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
+
+See the [documentation](https://docs.cosmian.com/cloudproof_encryption/use_cases_benefits/) for benefits, uses cases and technology details.
+
+
+## Running the application
+
+1. Git clone this repository.
+
+2. [Set up a test environment](#setup-a-test-environment) using the provided docker-compose file.
+The default configurations are provided in the repository.
+
+3. Maven must be installed. To build the application, run 
+```
+mvn package -Dmaven.test.skip @@ \
+mvn dependency:copy-dependencies
+```
+
+4. Then run the [Examples](#example-usage) below
+
+
+## Customizing the application
+
+To customize the format of the files processed, the values indexed and the attributes used to encrypt
+the files, modify the injector in  [Injector.java](src/main/java/com/cosmian/cloudproof_demo/injector/RecordInjector.java)
+
+The injection is coded in the [injector](src/main/java/com/cosmian/cloudproof_demo/injector) directory:
+ - Standalone java process: [StandaloneInjector.java](src/main/java/com/cosmian/cloudproof_demo/injector/StandaloneInjector.java)
+ - Spark: [SparkInjector.java](src/main/java/com/cosmian/cloudproof_demo/injector/SparkInjector.java)
+ - Kafka: [KafkaLineReader.java](/home/bgrieder/projects/cloudproof-java-demo/src/main/java/com/cosmian/cloudproof_demo/injector/KafkaLineReader.java)
+
+
+The extraction is coded in [extractor](src/main/java/com/cosmian/cloudproof_demo/extractor):
+ - Standalone Java Process: [StandaloneExtractor.java](src/main/java/com/cosmian/cloudproof_demo/extractor/StandaloneExtractor.java)
+ - Spark: [SparkExtractor.java](src/main/java/com/cosmian/cloudproof_demo/extractor/SparkExtractor.java)
+
+
+## Example data: encrypting a large people directory
+
+
+### Input/output data
 
 ```text
 {"firstName": "Felix","lastName": "Caparelli","phone": "06 52 23 63 25","email": "orci@icloud.fr","country": "France","region": "Corsica","employeeNumber": "SPN82TTO0PP","security": "confidential"}
@@ -85,7 +134,7 @@ graph LR
 
 ```
 
-#### Indexing using Symmetric Searchable Encryption
+### Indexing using Symmetric Searchable Encryption
 
 Five indexes are created on the following patterns:
 
@@ -103,14 +152,13 @@ A search for "Douglas" will retrieve all the Douglas, first name or last name
 
 A search for "first=Douglas" will only retrieve the Douglas used as a first name
 
-#### Attributes Based Encryption
+### Encrypting the data with labels
 
- - Enc: encryption with an ABE public key and policy attributes determined from the content of the transaction.
-Each transaction/line is considered unique and becomes a file in HDFS with name `Base58(SHA-256(content))`
+ - Enc: encryption with a CoverCrypt public key and policy attributes determined from the content of the record. (see below)
 
  - Dec: decryption with an user private key of authorised records collected in a clear text file. The access policy of the key determines which records can be decrypted.
 
-## Policy
+### Policy
 
 Two non hierarchical axes:
 
@@ -131,7 +179,7 @@ The `security` column is only visible to the super admin.
 ![paritions](./policy.png)
 
 
-## User Keys
+### User Keys
 
 User Decryption Keys with various access policies have been pre-generated in `src/test/resources/keys/`
 
@@ -262,10 +310,11 @@ Encrypt 101 records read from `.src/test/resources/users.txt` and write the 100 
     2. the injector will keep listening to the topic(s) until a line/record with the exact content `%END%` is received. 
     The injector will then exit and print the benchmarks.
 
-    3. to load data to a kafka topic, one can use
+    3. to load data to the kafka topic, use
     ```bash
     java -jar target/cloudproof-demo-3.0.0.jar --load-topic src/test/resources/users.txt
     ```
+    4. to send `%END%` to the topic, see [Indexing using Symmetric Searchable Encryption](#creating-a-kafka-topic-and-testing-it)
 
 - spark
 
@@ -493,7 +542,7 @@ If for security reasons, you still wish to do so,follow the steps below:
     mvn install -Dmaven.test.skip
     ```
 
-## Setup a test environment
+## Setting-up a test environment
 
 ### Spark 2.4.8 Hadoop 2.7
 
