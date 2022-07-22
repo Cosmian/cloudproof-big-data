@@ -1,6 +1,6 @@
 package com.cosmian.cloudproof_demo.fs;
 
-import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -34,7 +34,7 @@ public class LocalFileSystem implements AppFileSystem {
 
     public byte[] readFile(File file) throws AppException {
         try (InputStream is = new FileInputStream(file);) {
-            return read_all_bytes(is);
+            return StreamUtils.read_all_bytes(is);
         } catch (IOException e) {
             throw new AppException("failed reading the file at: " + file.getAbsolutePath() + ": " + e.getMessage(), e);
         }
@@ -56,17 +56,6 @@ public class LocalFileSystem implements AppFileSystem {
         }
     }
 
-    public static byte[] read_all_bytes(InputStream inputStream) throws IOException {
-        final int BUFFER_LENGTH = 4096;
-        byte[] buffer = new byte[BUFFER_LENGTH];
-        int readLen;
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-
-        while ((readLen = inputStream.read(buffer, 0, BUFFER_LENGTH)) != -1)
-            outputStream.write(buffer, 0, readLen);
-        return outputStream.toByteArray();
-    }
-
     @Override
     public Iterator<String> listFiles(String directoryPath) throws AppException {
         try {
@@ -82,10 +71,10 @@ public class LocalFileSystem implements AppFileSystem {
     }
 
     @Override
-    public InputStream getInputStream(String filePath) throws AppException {
+    public DataInputStream getInputStream(String filePath) throws AppException {
         Path path = Paths.get(filePath);
         try {
-            return new FileInputStream(path.toFile());
+            return new DataInputStream(new FileInputStream(path.toFile()));
         } catch (FileNotFoundException e) {
             throw new AppException("failed reading: " + path.toString() + ": file not found", e);
         }

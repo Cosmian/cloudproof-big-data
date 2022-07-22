@@ -1,0 +1,73 @@
+{
+  "tag" : "PrivateKey",
+  "value" : [ {
+    "tag" : "KeyBlock",
+    "value" : [ {
+      "tag" : "KeyFormatType",
+      "type" : "Enumeration",
+      "value" : "CoverCryptSecretKey"
+    }, {
+      "tag" : "KeyValue",
+      "value" : [ {
+        "tag" : "KeyMaterial",
+        "type" : "ByteString",
+        "value" : "0201092038650001333834C21E31E55EF22992E077621DD34B7F8098CA346A18A3F3E80500"
+      }, {
+        "tag" : "Attributes",
+        "value" : [ {
+          "tag" : "CryptographicAlgorithm",
+          "type" : "Enumeration",
+          "value" : "CoverCrypt"
+        }, {
+          "tag" : "KeyFormatType",
+          "type" : "Enumeration",
+          "value" : "CoverCryptSecretKey"
+        }, {
+          "tag" : "Link",
+          "value" : [ {
+            "tag" : "Link",
+            "value" : [ {
+              "tag" : "LinkType",
+              "type" : "Enumeration",
+              "value" : "ParentLink"
+            }, {
+              "tag" : "LinkedObjectIdentifier",
+              "type" : "TextString",
+              "value" : "dfff00c0-c404-422f-a8bf-df2c78759cfe"
+            } ]
+          } ]
+        }, {
+          "tag" : "ObjectType",
+          "type" : "Enumeration",
+          "value" : "PrivateKey"
+        }, {
+          "tag" : "VendorAttributes",
+          "value" : [ {
+            "tag" : "VendorAttributes",
+            "value" : [ {
+              "tag" : "VendorIdentification",
+              "type" : "TextString",
+              "value" : "cosmian"
+            }, {
+              "tag" : "AttributeName",
+              "type" : "TextString",
+              "value" : "cover_crypt_access_policy"
+            }, {
+              "tag" : "AttributeValue",
+              "type" : "ByteString",
+              "value" : "7B22416E64223A5B7B2241747472223A224465706172746D656E743A3A4852227D2C7B2241747472223A22436F756E7472793A3A537061696E227D5D7D"
+            } ]
+          } ]
+        } ]
+      } ]
+    }, {
+      "tag" : "CryptographicAlgorithm",
+      "type" : "Enumeration",
+      "value" : "CoverCrypt"
+    }, {
+      "tag" : "CryptographicLength",
+      "type" : "Integer",
+      "value" : 296
+    } ]
+  } ]
+}

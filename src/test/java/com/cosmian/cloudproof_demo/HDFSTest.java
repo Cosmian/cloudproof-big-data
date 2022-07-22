@@ -13,17 +13,18 @@ import java.util.Iterator;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.cosmian.cloudproof_demo.fs.HDFSOriginal;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.cosmian.cloudproof_demo.fs.HDFS;
+
 public class HDFSTest {
 
     private static final Logger logger = Logger.getLogger(HDFSTest.class.getName());
+
     private final static String hdfsUrl = "hdfs://root@localhost:9000/";
     static {
         App.configureLog4j();
@@ -31,9 +32,7 @@ public class HDFSTest {
 
     @BeforeAll
     public static void before_all() {
-        App.configureLog4j();
         App.initLogging(Level.INFO);
-
     }
 
     @Test
@@ -46,7 +45,7 @@ public class HDFSTest {
         byte[] data = "Hello, World".getBytes(StandardCharsets.UTF_8);
 
         Path parent = Paths.get("/user/root");
-        HDFSOriginal hdfs = new HDFSOriginal(hdfsUrl, "root");
+        HDFS hdfs = new HDFS(hdfsUrl, "root");
         hdfs.writeFile(parent.resolve("hw").toString(), data);
         byte[] data_ = hdfs.readFile(parent.resolve("hw").toString());
         assertArrayEquals(data, data_);
@@ -80,7 +79,7 @@ public class HDFSTest {
                         fs.getStatus();
                     } catch (IOException e) {
                         logger.info(
-                                "Skipping test: HDFS not available at:  " + rootHdfsUrl + " (" + e.getMessage() + ")");
+                            "Skipping test: HDFS not available at:  " + rootHdfsUrl + " (" + e.getMessage() + ")");
                         return false;
                     }
 

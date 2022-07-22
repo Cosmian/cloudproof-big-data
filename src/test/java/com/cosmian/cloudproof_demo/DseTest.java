@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
+import com.cosmian.cloudproof_demo.sse.DBEntryTableRecord;
 import com.cosmian.cloudproof_demo.sse.Sse.Bytes;
 import com.cosmian.cloudproof_demo.sse.Sse.Key;
 import com.cosmian.cloudproof_demo.sse.Sse.WordHash;
@@ -28,11 +29,11 @@ public class DseTest {
     @BeforeAll
     public static void before_all() {
         App.configureLog4j();
-        App.initLogging(Level.INFO);
+        App.initLogging(Level.FINE);
     }
 
-    private <B extends Bytes> HashMap<B, byte[]> generateEntries(Random rd, Class<B> clazz, int numEntries,
-            int ciphertextLen) {
+    private <B extends Bytes> HashMap<B, byte[]> generateByteEntries(Random rd, Class<B> clazz, int numEntries,
+        int ciphertextLen) {
         // generate NUM_LINES DB UIds of WORDS_PER_LINE words each
         System.out.print("Generating " + numEntries + " entries with key " + clazz.getName() + "....");
         final long genStart = System.nanoTime();
@@ -44,7 +45,7 @@ public class DseTest {
             try {
                 key = clazz.getDeclaredConstructor(byte[].class).newInstance(keyB);
             } catch (InstantiationException | IllegalAccessException | IllegalArgumentException
-                    | InvocationTargetException | NoSuchMethodException | SecurityException e) {
+                | InvocationTargetException | NoSuchMethodException | SecurityException e) {
                 System.err.println("Could not generate entries: " + e.getMessage());
                 e.printStackTrace();
                 throw new RuntimeException("Could not generate entries: " + e.getMessage(), e);
@@ -58,6 +59,42 @@ public class DseTest {
         return entries;
     }
 
+    private <B extends Bytes> Map<B, DBEntryTableRecord> generateEntryTableEntries(Random rd, Class<B> clazz,
+        int numEntries, int ciphertextLen) {
+        return generateByteEntries(rd, clazz, numEntries, ciphertextLen).entrySet().stream()
+            .map(e -> new Map.Entry<B, DBEntryTableRecord>() {
+
+                @Override
+                public B getKey() {
+                    return e.getKey();
+                }
+
+                @Override
+                public DBEntryTableRecord getValue() {
+                    return new DBEntryTableRecord() {
+
+                        @Override
+                        public int getRevision() {
+                            return 0;
+                        }
+
+                        @Override
+                        public byte[] getEncryptedValue() {
+                            return e.getValue();
+                        }
+
+                    };
+                }
+
+                @Override
+                public DBEntryTableRecord setValue(DBEntryTableRecord value) {
+
+                    return null;
+                }
+
+            }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
     @Test
     public void upsertRetrieve() throws Exception {
 
@@ -67,21 +104,56 @@ public class DseTest {
 
             // Entry Table
             db.truncateEntryTable();
-            HashMap<WordHash, byte[]> entryTableEntries = generateEntries(rd, WordHash.class, NUM_ENTRIES, 32);
-            db.upsertEntryTableEntries(entryTableEntries);
+            Map<WordHash, DBEntryTableRecord> entryTableEntries =
+                generateEntryTableEntries(rd, WordHash.class, NUM_ENTRIES, 32);
+            Map<WordHash, Boolean> firstInsertResults = db.upsertEntryTableEntries(entryTableEntries);
             assertEquals(NUM_ENTRIES, db.entryTableSize());
+            assertEquals(NUM_ENTRIES, firstInsertResults.size());
+            firstInsertResults.values().stream().forEach(b -> assertEquals(true, b));
 
-            HashMap<WordHash, byte[]> entryResults = db.getEntryTableEntries(entryTableEntries.keySet());
+            HashMap<WordHash, DBEntryTableRecord> entryResults = db.getEntryTableEntries(entryTableEntries.keySet());
             assertEquals(entryTableEntries.size(), entryResults.size());
-            for (Map.Entry<WordHash, byte[]> entry : entryResults.entrySet()) {
-                byte[] original = entryTableEntries.get(entry.getKey());
+            for (Map.Entry<WordHash, DBEntryTableRecord> entry : entryResults.entrySet()) {
+                DBEntryTableRecord original = entryTableEntries.get(entry.getKey());
                 assertNotNull(original);
-                assertArrayEquals(original, entry.getValue());
+                assertEquals(original.getRevision(), entry.getValue().getRevision());
+                assertArrayEquals(original.getEncryptedValue(), entry.getValue().getEncryptedValue());
             }
+
+            // re-insert the same values
+            Map<WordHash, Boolean> secondInsertResults = db.upsertEntryTableEntries(entryTableEntries);
+            assertEquals(NUM_ENTRIES, secondInsertResults.size());
+            secondInsertResults.values().stream().forEach(b -> assertEquals(false, b));
+
+            // update the revision of the first 5
+            Map<WordHash, DBEntryTableRecord> updatedEntryTableEntries = new HashMap<>(entryTableEntries.size());
+            entryTableEntries.entrySet().stream().forEach((entry) -> {
+                updatedEntryTableEntries.put(entry.getKey(), new DBEntryTableRecord() {
+
+                    @Override
+                    public int getRevision() {
+                        return entry.getValue().getRevision() + 1;
+                    }
+
+                    @Override
+                    public byte[] getEncryptedValue() {
+                        return entry.getValue().getEncryptedValue();
+                    }
+
+                });
+            });
+            Map<WordHash, Boolean> firstUpdateResults = db.upsertEntryTableEntries(updatedEntryTableEntries);
+            assertEquals(NUM_ENTRIES, firstUpdateResults.size());
+            firstUpdateResults.values().stream().forEach(b -> assertEquals(true, b));
+
+            // second update - should return false with the same revisions ids
+            Map<WordHash, Boolean> secondUpdateResults = db.upsertEntryTableEntries(updatedEntryTableEntries);
+            assertEquals(NUM_ENTRIES, secondUpdateResults.size());
+            secondUpdateResults.values().stream().forEach(b -> assertEquals(false, b));
 
             // Chain Table
             db.truncateChainTable();
-            HashMap<Key, byte[]> chainTableEntries = generateEntries(rd, Key.class, NUM_ENTRIES, 32);
+            HashMap<Key, byte[]> chainTableEntries = generateByteEntries(rd, Key.class, NUM_ENTRIES, 32);
             db.upsertChainTableEntries(chainTableEntries);
             assertEquals(NUM_ENTRIES, db.chainTableSize());
 

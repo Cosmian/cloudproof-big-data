@@ -1,6 +1,6 @@
 package com.cosmian.cloudproof_demo.sse;
 
-import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import com.cosmian.CosmianException;
@@ -10,22 +10,23 @@ import com.cosmian.cloudproof_demo.sse.Sse.WordHash;
 public interface DBInterface {
 
     /**
-     * Retrieve the encrypted values of the Entry Table for a given set of word
-     * hashes
+     * Retrieve the encrypted values of the Entry Table for a given set of word hashes
      * 
      * @param wordHashes as set of word hashes (sated by K₁)
      * @return the entries of word hashes to encrypted values
      * @throws CosmianException if the map cannot be fetched
      */
-    HashMap<WordHash, byte[]> getEntryTableEntries(Set<WordHash> wordHashes) throws CosmianException;
+    Map<WordHash, DBEntryTableRecord> getEntryTableEntries(Set<WordHash> wordHashes) throws CosmianException;
 
     /**
-     * Upsert the entries (Word hash -> encrypted value) in the Entry Table
+     * Upsert the entries (Word hash -> encrypted value) in the Entry Table If there is a revision conflict, the
+     * operation will be unsuccessful and false will be returned in the results map
      * 
      * @param entries the entries to upsert
+     * @return a map of successful operations per WordHash
      * @throws CosmianException if the entries cannot be upserted
      */
-    void upsertEntryTableEntries(HashMap<WordHash, byte[]> entries) throws CosmianException;
+    Map<WordHash, Boolean> upsertEntryTableEntries(Map<WordHash, DBEntryTableRecord> entries) throws CosmianException;
 
     /**
      * Retrieve the encrypted db UIDs from the Chain Table
@@ -42,6 +43,6 @@ public interface DBInterface {
      * @param entries the entries to upsert
      * @throws CosmianException if the entries cannot be upserted
      */
-    void upsertChainTableEntries(HashMap<Key, byte[]> entries) throws CosmianException;
+    void upsertChainTableEntries(Map<Key, byte[]> entries) throws CosmianException;
 
 }

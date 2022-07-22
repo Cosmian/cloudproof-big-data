@@ -1,49 +1,56 @@
-# Cloudproof-java-demo
-## Cloudproof encryption: encryption and secure search of large (Big Data) repositories in the cloud
+<h1>Cloudproof for Big Data</h1>
 
-Cloudproof provides encryption so that large repositories of data, and indexes 
- - can be safely stored encrypted and partitioned in the cloud then
- - quickly and confidentially searched using encrypted indexes and queries
- 
-Users can only decrypt data from partitions matching the access policy of their keys.
+This repository provides a complete working big data application to encrypt and securely index a big data repository, 
+then perform secure searches and decryption using 
 
-At no time does the cloud learn anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
+This application shows: 
 
-See the [documentation](https://docs.cosmian.com/cloudproof_encryption/use_cases_benefits/) for benefits, uses cases and technology details.
+ - fetching data
+    - directly from a file using a standalone Java app or Spark
+    - from a Kafka topic
+ - encrypted indexing and encrypting records with attributes using [Cloudproof cryptographic primitives](#cloudproof-encryption)
+ - writing the encrypted records to files hosted in a Hadoop Distributed File System (HDFS)
+ - encrypted search and decryption of authorized transaction from HDFS using private keys that hold various access policies, using either a the standalone java program or Spark.
 
-This demo shows: 
-
- - encrypted indexing and encryption of records to a Hadoop Distributed File System (HDFS) using a public key and policy attributes.
- - encrypted search and decryption of authorized transaction from HDFS using a private key that holds an access policy.
-
-Encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in this demo.
+The encrypted indexes are stored in a cloud-type key-value store, Cassandra DSE in this demo.
 
 
+<!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
+<!-- code_chunk_output -->
 
-  - [Cloudproof encryption: encryption and secure search of large (Big Data) repositories in the cloud](#cloudproof-encryption-encryption-and-secure-search-of-large-big-data-repositories-in-the-cloud)
-  - [Flow Overview](#flow-overview)
-      - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
-      - [Attributes Based Encryption](#attributes-based-encryption)
+- [Flow Overview](#flow-overview)
+- [Cloudproof encryption](#cloudproof-encryption)
+- [Running the application](#running-the-application)
+- [Customizing the application](#customizing-the-application)
+- [Example data: encrypting a large people directory](#example-data-encrypting-a-large-people-directory)
+  - [Input/output data](#inputoutput-data)
+  - [Indexing using Symmetric Searchable Encryption](#indexing-using-symmetric-searchable-encryption)
+  - [Encrypting the data with labels](#encrypting-the-data-with-labels)
   - [Policy](#policy)
   - [User Keys](#user-keys)
-  - [Software](#software)
-    - [Example Usage](#example-usage)
-      - [Encrypting](#encrypting)
-      - [Searching](#searching)
-      - [Direct Decryption](#direct-decryption)
-    - [Building](#building)
-    - [main program: cloudproof-demo](#main-program-cloudproof-demo)
-    - [abe-gpsw](#abe-gpsw)
-      - [Building abe-gpsw for a different glibc](#building-abe-gpsw-for-a-different-glibc)
-    - [cosmian_java_lib](#cosmian_java_lib)
-    - [Setting up a test hadoop environment](#setting-up-a-test-hadoop-environment)
-      - [Listing Hadoop files](#listing-hadoop-files)
-    - [Setting up Cassandra DSE](#setting-up-cassandra-dse)
-      - [Running locally](#running-locally)
-    - [Building a zip of this demo](#building-a-zip-of-this-demo)
+- [Software](#software)
+  - [Example Usage](#example-usage)
+    - [Encrypting](#encrypting)
+    - [Searching](#searching)
+    - [Direct Decryption](#direct-decryption)
+  - [Building](#building)
+  - [main program: cloudproof-demo](#main-program-cloudproof-demo)
+  - [CoverCrypt](#covercrypt)
+  - [cosmian_java_lib](#cosmian_java_lib)
+- [Setting-up a test environment](#setting-up-a-test-environment)
+  - [Spark 2.4.8 Hadoop 2.7](#spark-248-hadoop-27)
+  - [Kafka 2.7](#kafka-27)
+  - [Cassandra DSE 5.1.20 and Hadoop HDFS 2.7.5](#cassandra-dse-5120-and-hadoop-hdfs-275)
+  - [Listing Hadoop files](#listing-hadoop-files)
+  - [Creating a Kafka topic and testing it](#creating-a-kafka-topic-and-testing-it)
+  - [Building a zip of this demo](#building-a-zip-of-this-demo)
 
- 
+<!-- /code_chunk_output -->
+
+
+
+
 
 ## Flow Overview
 
@@ -51,8 +58,8 @@ Upserting
 ```mermaid
 %%{init: {'theme': 'neutral'}}%%
 graph LR
-    File[[File]] -- index --> DSE[(DSE)]
-    File[[File]] -- encrypt --> HDFS[(HDFS)]
+    File[[File/Kafka]] -- index --> DSE[(DSE)]
+    File[[File/Kafka]] -- encrypt --> HDFS[(HDFS)]
 ```
 
 Searching
@@ -67,7 +74,55 @@ graph LR
 
 
 
-**input/output file**
+## Cloudproof encryption
+
+Cloudproof provides encryption so that large repositories of data, and indexes 
+ - can be safely stored encrypted with embedded policy attributes in the cloud then
+ - quickly and confidentially searched using encrypted indexes and queries
+ 
+Users can only decrypt data from partitions matching the access policy of their keys.
+
+At no time does the cloud learn anything about the data stored, the indexes content, the queries to the indexes or the responses to the queries.
+
+See the [documentation](https://docs.cosmian.com/cloudproof_encryption/use_cases_benefits/) for benefits, uses cases and technology details.
+
+
+## Running the application
+
+1. Git clone this repository.
+
+2. [Set up a test environment](#setup-a-test-environment) using the provided docker-compose file.
+The default configurations are provided in the repository.
+
+3. Maven must be installed. To build the application, run 
+```
+mvn package -Dmaven.test.skip @@ \
+mvn dependency:copy-dependencies
+```
+
+4. Then run the [Examples](#example-usage) below
+
+
+## Customizing the application
+
+To customize the format of the files processed, the values indexed and the attributes used to encrypt
+the files, modify the injector in  [Injector.java](src/main/java/com/cosmian/cloudproof_demo/injector/RecordInjector.java)
+
+The injection is coded in the [injector](src/main/java/com/cosmian/cloudproof_demo/injector) directory:
+ - Standalone java process: [StandaloneInjector.java](src/main/java/com/cosmian/cloudproof_demo/injector/StandaloneInjector.java)
+ - Spark: [SparkInjector.java](src/main/java/com/cosmian/cloudproof_demo/injector/SparkInjector.java)
+ - Kafka: [KafkaLineReader.java](/home/bgrieder/projects/cloudproof-java-demo/src/main/java/com/cosmian/cloudproof_demo/injector/KafkaLineReader.java)
+
+
+The extraction is coded in [extractor](src/main/java/com/cosmian/cloudproof_demo/extractor):
+ - Standalone Java Process: [StandaloneExtractor.java](src/main/java/com/cosmian/cloudproof_demo/extractor/StandaloneExtractor.java)
+ - Spark: [SparkExtractor.java](src/main/java/com/cosmian/cloudproof_demo/extractor/SparkExtractor.java)
+
+
+## Example data: encrypting a large people directory
+
+
+### Input/output data
 
 ```text
 {"firstName": "Felix","lastName": "Caparelli","phone": "06 52 23 63 25","email": "orci@icloud.fr","country": "France","region": "Corsica","employeeNumber": "SPN82TTO0PP","security": "confidential"}
@@ -79,7 +134,7 @@ graph LR
 
 ```
 
-#### Indexing using Symmetric Searchable Encryption
+### Indexing using Symmetric Searchable Encryption
 
 Five indexes are created on the following patterns:
 
@@ -97,14 +152,13 @@ A search for "Douglas" will retrieve all the Douglas, first name or last name
 
 A search for "first=Douglas" will only retrieve the Douglas used as a first name
 
-#### Attributes Based Encryption
+### Encrypting the data with labels
 
- - Enc: encryption with an ABE public key and policy attributes determined from the content of the transaction.
-Each transaction/line is considered unique and becomes a file in HDFS with name `Base58(SHA-256(content))`
+ - Enc: encryption with a CoverCrypt public key and policy attributes determined from the content of the record. (see below)
 
  - Dec: decryption with an user private key of authorised records collected in a clear text file. The access policy of the key determines which records can be decrypted.
 
-## Policy
+### Policy
 
 Two non hierarchical axes:
 
@@ -125,7 +179,7 @@ The `security` column is only visible to the super admin.
 ![paritions](./policy.png)
 
 
-## User Keys
+### User Keys
 
 User Decryption Keys with various access policies have been pre-generated in `src/test/resources/keys/`
 
@@ -147,7 +201,15 @@ When policy attributes of a record make the expression `true`, the record can be
 
 ## Software
 
-Java standalone program that performs injection with encryption to HDFS and indexing to Cassandra and secure querying to Cassandra extraction with decryption from HDFS.
+The program comes in 2 flavors:
+
+ - as a java standalone executable
+ - and as a Spark program
+
+It performs 
+
+ - injection with encryption to HDFS and indexing to Cassandra 
+  - and secure querying to Cassandra extraction with decryption from HDFS.
 
 Fot instructions on how to build the software, see the [building](#building) section at the end.
 
@@ -156,69 +218,139 @@ Four sub-commands:
  - `--search` : search words, extract and decrypt
  - `--decrypt`: direct extraction and decryption
  - `--generate-keys`: generate the keys above (requires KMS)
+ - `--load-topic`: load data to a kafka topic
 
 
 ```
-❯ java -jar target/cloudproof-demo-1.0.0.jar
+❯ java -jar target/cloudproof-demo-3.0.0.jar 
+Jul 11, 2022 7:17:33 AM com.cosmian.cloudproof_demo.App main
+INFO: Stating standalone app with args: []
 usage: usage: app SUB-COMMAND [OPTIONS] [SOURCE URI] [WORD1, WORD2,...]
- -c,--clear-text-filename <FILENAME>   the name of the clear text file
-                                       when running decryption. Defaults
-                                       to clear.txt
- -d,--decrypt                          decrypt the supplied files and
-                                       directories URI(s)
- -dc,--dse-datacenter <DATACENTER>     the datacenter of the DSE server.
-                                       Defaults to NULL or dc1 if the IP
-                                       is 127.0.0.1
- -di,--dse-ip <IP>                     the IP address of the DSE server.
-                                       Defaults to 127.0.0.1
- -dp,--dse-port <PORT>                 the port of the DSE server.
-                                       Defaults to 9042
- -du,--dse-username <USERNAME>         the username to connect to the DSE
-                                       server. Defaults to NULL
- -dup,--dse-password <PASSWORD>        the password to connect to the DSE
-                                       server. Defaults to NULL
- -e,--encrypt                          encrypt the supplied files and
-                                       directories URI(s)
- -g,--generate-keys                    generate all the keys (needs a KMS access)
- -k,--key <FILE>                       the path to the key file: defaults
-                                       to key.json
- -o,--output-dir <URI>                 the path of the output directory.
-                                       Defaults to '.' for the filesystem,
-                                       /user/${user} for HDFS
- -s,--search                           search the supplied root URI for
-                                       the words
+ -c,--clear-text-filename <arg>   the name of the clear text file when
+                                  running decryption. Defaults to
+                                  clear.txt
+ -d,--decrypt                     decrypt the supplied files and
+                                  directories URI(s)
+ -dc,--dse-datacenter <arg>       the datacenter of the DSE server.
+                                  Defaults to NULL or dc1 if the IP is
+                                  127.0.0.1
+ -di,--dse-ip <arg>               the IP address of the DSE server.
+                                  Defaults to 127.0.0.1
+ -dk,--dse-keyspace <arg>         the keyspace to use for the tables.
+                                  Defaults to cosmian_sse
+ -dp,--dse-port <arg>             the port of the DSE server. Defaults to
+                                  9042
+ -du,--dse-username <arg>         the username to connect to the DSE
+                                  server. Defaults to NULL
+ -dup,--dse-password <arg>        the password to connect to the DSE
+                                  server. Defaults to NULL
+ -e,--encrypt                     encrypt the supplied files and
+                                  directories URI(s)
+ -g,--generate-keys               generate all the keys
+ -k,--key <arg>                   the path to the key file: defaults to
+                                  key.json
+ -kt,--kafka                      when encrypting the list of passed input
+                                  are kafka topics
+ -l,--load-topic                  load a kafka topic with data
+ -ma,--max-age <arg>              the maximum age in seconds of an
+                                  encrypted file before it rolls over to a
+                                  new file. Defaults to MAX_INT (2 147 483
+                                  647)
+ -ms,--max-size <arg>             the maximum size in mega bytes of an
+                                  encrypted file before it rolls over to a
+                                  new file. Defaults to MAX_INT (2 147 483
+                                  647)
+ -o,--output-dir <arg>            the path of the output directory.
+                                  Defaults to '.' for the filesystem,
+                                  /user/${user} for HDFS
+ -or,--disjunction                run a disjunction (OR) between the
+                                  search words. Defaults to conjunction
+                                  (AND)
+ -s,--search                      search the supplied root URI for the
+                                  words
+ -zi,--drop-indexes               drop the indexes before running the
+                                  injector (i.e. --encrypt)
 ```
 
 ### Example Usage
 
-This shows example using the Hadoop test environment set-up below
+This shows examples using the Hadoop test environment set-up below
 
-Replace the `hdfso:` scheme with `hdfs:` in the URIs below if you wish to use 
+To use the spark version, simply replace `java -jar target/cloudproof-demo-3.0.0.jar` with `./spark-run.sh` in any example below
+
+Replace the `hdfs:` scheme with `hdfsk:` in the URIs below if you wish to use 
 the HDFS connector with kerberos authentication (the 2.7.5 hadoop docker below does NOT use Kerberos)
 
 #### Encrypting
 
-Encrypt 100 records read from `.src/test/resources/users.txt` and write the 100 files to HDFS at `"hdfs://root@localhost:9000/user/root/"`
+Encrypt 101 records read from `.src/test/resources/users.txt` and write the 100 files to HDFS at `"hdfs://root@localhost:9000/user/root/"`
 
-```bash
-java -jar target/cloudproof-demo-1.0.0.jar --encrypt \
-    -k src/test/resources/keys/public_key.json \
-    -o "hdfso://root@localhost:9000/user/root/" \
-    src/test/resources/users.txt
-```
+- standalone from files
+
+    ```bash
+    time java -jar target/cloudproof-demo-3.0.0.jar --encrypt \
+        -k src/test/resources/keys/public_key.json \
+        -o "hdfs://root@localhost:9000/user/root/" \
+        src/test/resources/users.txt
+    ```
+
+-  standalone from kafka topic(s)
+
+    ```bash
+    java -jar target/cloudproof-demo-3.0.0.jar --encrypt \
+        -k src/test/resources/keys/public_key.json \
+        -o "hdfs://root@localhost:9000/user/root/" \
+        --kafka cloudproof-demo
+    ```    
+
+    When using Kafka, 
+    
+    1. the injector will look for a `kafka.properties` file in the current directory to configure the Kafka consumer.
+    
+    2. the injector will keep listening to the topic(s) until a line/record with the exact content `%END%` is received. 
+    The injector will then exit and print the benchmarks.
+
+    3. to load data to the kafka topic, use
+    ```bash
+    java -jar target/cloudproof-demo-3.0.0.jar --load-topic src/test/resources/users.txt
+    ```
+    4. to send `%END%` to the topic, see [Indexing using Symmetric Searchable Encryption](#creating-a-kafka-topic-and-testing-it)
+
+- spark
+
+    ```bash
+    time ./spark-run.sh --encrypt \
+        -k src/test/resources/keys/public_key.json \
+        -o "hdfs://root@localhost:9000/user/root/" \
+        src/test/resources/users.txt
+    ```
 
 #### Searching
 
 Alice can read the Marketing part (the region) of all users in France
 
-```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
-    -k src/test/resources/keys/user_Alice_key.json \
-    -o src/test/resources/dec/ \
-    -c search_Alice.txt \
-    "hdfso://root@localhost:9000/user/root/" \
-    "country=France"
-```
+ - standalone
+
+    ```bash
+    time java -jar target/cloudproof-demo-3.0.0.jar --search \
+        -k src/test/resources/keys/user_Alice_key.json \
+        -o src/test/resources/dec/ \
+        -c search_results.txt \
+        "hdfs://root@localhost:9000/user/root/" \
+        "country=France"
+    ```
+
+ - spark
+
+    ```bash
+    time ./spark-run.sh --search \
+        -k src/test/resources/keys/user_Alice_key.json \
+        -o src/test/resources/dec/ \
+        -c search_results.txt \
+        "hdfs://root@localhost:9000/user/root/" \
+        "country=France"
+    ```
+
 
 ```
 {"firstName":"Skyler","lastName":"Richmond","country":"France","region":"Chiapas"}
@@ -233,22 +365,22 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 ... but no user outside of France
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
     -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
-    -c search_Alice.txt \
-    "hdfso://root@localhost:9000/user/root/" \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
     "country=Spain"
 ```
 
 Bob can read the email, phone and employee number part of all users in Spain, but not their marketing part (the region)
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
     -k src/test/resources/keys/user_Bob_key.json \
     -o src/test/resources/dec/ \
-    -c search_Bob.txt \
-    "hdfso://root@localhost:9000/user/root/" \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
     "country=Spain"
 ```
 
@@ -266,13 +398,15 @@ As expected the Super Admin can find users in all countries and view all details
 
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --search \
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
     -k src/test/resources/keys/user_SuperAdmin_key.json \
     -o src/test/resources/dec/ \
-    -c search_SuperADmin.txt \
-    "hdfso://root@localhost:9000/user/root/" \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
     "Douglas"
 ```
+
+... returns 3 records with first name **or** last name being "Douglas"
 
 ```
 {"firstName":"Kalia","lastName":"Douglas","country":"France","security":"top_secret","phone":"03 56 82 77 04","region":"Tripura","email":"mus.proin@hotmail.net","employeeNumber":"AHM27UPN3HD"}
@@ -281,19 +415,67 @@ java -jar target/cloudproof-demo-1.0.0.jar --search \
 
 ```
 
-Please note that this query retrieved first name or last name is equal to 'Douglas'.
+By default, search implements a conjunction (AND) when searching multiple words:
 
+
+```bash
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
+    -k src/test/resources/keys/user_SuperAdmin_key.json \
+    -o src/test/resources/dec/ \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
+    "last=Douglas" "country=France"
+```
+
+... returns 2 records
+
+```
+{"firstName":"Kalia","lastName":"Douglas","country":"France","security":"top_secret","phone":"03 56 82 77 04","region":"Tripura","email":"mus.proin@hotmail.net","employeeNumber":"AHM27UPN3HD"}
+{"firstName":"Xander","lastName":"Douglas","country":"France","security":"top_secret","phone":"08 22 77 36 03","region":"Ile de France","email":"arcu.sed@protonmail.couk","employeeNumber":"DIY45MVM4TV"}
+```
+
+... while ...
+
+```bash
+time java -jar target/cloudproof-demo-3.0.0.jar --search \
+    -k src/test/resources/keys/user_SuperAdmin_key.json \
+    -o src/test/resources/dec/ \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
+    "last=Douglas" "country=Spain"
+```
+
+... does not return any record
+
+It is also possible to run a disjunction (OR) by specifying the `--or` option
+
+```bash
+time java -jar target/cloudproof-demo-3.0.0.jar --search --or \
+    -k src/test/resources/keys/user_SuperAdmin_key.json \
+    -o src/test/resources/dec/ \
+    -c search_results.txt \
+    "hdfs://root@localhost:9000/user/root/" \
+    "first=Douglas" "last=Douglas"
+```
+
+...returns 3 records
+
+```
+{"firstName":"Douglas","lastName":"Jones","country":"Spain","security":"confidential","phone":"02 91 58 51 74","region":"Kahramanmaraş","email":"djones@yahoo.com","employeeNumber":"JCO88AVA2LH"}
+{"firstName":"Xander","lastName":"Douglas","country":"France","security":"top_secret","phone":"08 22 77 36 03","region":"Ile de France","email":"arcu.sed@protonmail.couk","employeeNumber":"DIY45MVM4TV"}
+{"firstName":"Kalia","lastName":"Douglas","country":"France","security":"top_secret","phone":"03 56 82 77 04","region":"Tripura","email":"mus.proin@hotmail.net","employeeNumber":"AHM27UPN3HD"}
+```
 
 #### Direct Decryption
 
 It is also possible to attempt to directly decrypt all records (i.e. without doing a search)
 
 ```bash
-java -jar target/cloudproof-demo-1.0.0.jar --decrypt \
+time java -jar target/cloudproof-demo-3.0.0.jar --decrypt \
     -k src/test/resources/keys/user_Alice_key.json \
     -o src/test/resources/dec/ \
     -c direct_Alice.txt \
-    "hdfso://root@localhost:9000/user/root/"
+    "hdfs://root@localhost:9000/user/root/"
 ```
 
 
@@ -325,90 +507,16 @@ The software is linked to 2 separate open-source libraries made by Cosmian. For 
 3. Print the help to check everything is fine
 
     ```
-    java -jar target/cloudproof-demo-1.0.0.jar
+    java -jar target/cloudproof-demo-3.0.0.jar
     ```
 
 
-### abe-gpsw
+### CoverCrypt
 
-A pre-built linux version of the abe_gpsw library is already available in the `src/main/resources/linux-x86-64` folder. However:
+Pre-built linux versions of the cover_crypt library is already available in the `src/main/resources/linux-x86-64` and `src/main/resources/darwin-x86-64` folder. However:
 
- - this version is built against GLIBC 2.34 which may not be the version on your system
+ - this linux version is built against GLIBC 2.17 which may not be compatible with your system
  - this library is holding the cryptographic primitives: from a security standpoint, you should not trust the binary and build yourself from sources
-
-1. Install a recent rust compiler using rustup: [Instructions](https://rustup.rs/)
-2. Clone the abe_gpsw repository:
-    ```
-    git clone https://github.com/Cosmian/abe_gpsw.git
-    ```
-3. Checkout the version v0.6.5
-    ```
-    git checkout v0.6.5
-    ```
-
-4. Inside the abe_gpsw project directory, build the library unassigned
-    ```
-    cargo build --release --all-features
-    ```
-5. Copy the dynamic library in `target/release` subdirectory (called `libabe_gpsw.so` on Linux) to this `cloudproof-demo` project
-
-    - `src/main/resources/linux-x86-64` folder for a Linux Intel machine
-    - `src/main/resources/linux-amd64` folder for a Linux AMD machine
-    - `src/main/resources/darwin` folder for a Mac running MacOS
-    - `src/main/resources/win32-x86` folder for a Windows machine (untested)
-
-#### Building abe-gpsw for a different glibc
-
-Step 1. 2. and 3. are identical as above
-
-4. Pull a distribution with the appropriate glibc (here targeting 2.17)
-
-    ```sh
-    sudo docker pull centos:centos7.4.1708
-    ```
-
-
-5. Execute the shell, mounting the current directory to `/root/abe_gpsw` inside the docker
-
-    ```sh
-    sudo docker run -it --rm -v $(pwd):/root/abe_gpsw centos:centos7.4.1708 /bin/bash
-    ```
-
-6. Inside the docker container, install rustup
-
-    ```sh
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-    ```
-
-7. Set the rust environment variables
-
-    ```sh
-    source $HOME/.cargo/env
-    ```
-
-8. Install missing build tools
-
-    You may be missing linkers, etc... for centOs
-
-    ```sh
-    yum groupinstall "Development Tools"
-    ```
-
-    for Ubuntu
-
-    ```sh
-    sudo apt install build-essential
-    ```
-
-9. Build the library
-
-    ```sh
-    cd /root/abe_gpsw/
-    cargo build --release --all-features --target-dir target_2_17
-    ```
-
-The library binary is available in `target_2_17/release/libabe_gpsw.so` 
-and should be placed in `src/main/resources/linux-x86-64` of this project
 
 ### cosmian_java_lib
 
@@ -420,9 +528,9 @@ If for security reasons, you still wish to do so,follow the steps below:
     git clone https://github.com/Cosmian/cosmian_java_lib.git
     ```
 
-2. Checkout the version v0.6.3
+2. Checkout the version v0.7.5
     ```
-    git checkout v0.6.3
+    git checkout v0.7.5
     ```
 3. In the root directory of the cosmian_java_lib project, build the jar:
     ```
@@ -434,67 +542,68 @@ If for security reasons, you still wish to do so,follow the steps below:
     mvn install -Dmaven.test.skip
     ```
 
+## Setting-up a test environment
 
+### Spark 2.4.8 Hadoop 2.7
 
-### Setting up a test hadoop environment
+Download [Spark 2.4.8 Hadoop 2.7](https://archive.apache.org/dist/spark/spark-2.4.8/spark-2.4.8-bin-hadoop2.7.tgz)
+and install it ina folder. 
 
-This uses a docker version of hadoop 2.7.5 and makes it available to the `root` user at:
+Set the environment variable `SPARK_HOME` to the folder path.
 
- - root fs: `hdfs://root@localhost:9000/user/root`
- - admin console: http://localhost:8088
+### Kafka 2.7
 
-1. Create a `hadoop-2.7.5` directory and the following sub-directories
+Download Kafka 2.7.2 from https://archive.apache.org/dist/kafka/2.7.2/kafka_2.12-2.7.2.tgz and extract it
 
-```bash
-mkdir shared
-mkdir logs
-mkdir input
+### Cassandra DSE 5.1.20 and Hadoop HDFS 2.7.5
+
+Start the servers using the provided `docker-compose.yml` file i.e. in this directory, run
+
+```sh
+docker-compose up
 ```
 
-2. Start hadoop running the following command in th `hadoop-2.7.5` directory
+### Listing Hadoop files
+
+Use the provided helper script
 
 ```bash
-docker run --name hadoop-2.7.5 \
--v $(pwd)/shared:/usr/local/hadoop/shared \
--v $(pwd)/logs:/usr/local/hadoop/logs \
--v hadoop-2.7.5-data:/usr/local/hadoop/data \
--v $(pwd)/input:/usr/local/hadoop/input \
--p 8088:8088 \
--p 8042:8042 \
--p 9000:9000 \
---rm \
-zejnils/hadoop-docker
-```
-
-3. To stop hadoop, run
-
-```bash
-docker stop hadoop-2.7.5
-```
-
-#### Listing Hadoop files
-
-Run the command inside the docker container:
-
-```bash
-sudo docker exec hadoop-2.7.5 /bin/bash -c "/usr/local/hadoop-2.7.5/bin/hadoop fs -ls"
+./hdfs.sh -ls
 ```
 
 ... to count them ....
 ```bash
-sudo docker exec hadoop-2.7.5 /bin/bash -c "/usr/local/hadoop-2.7.5/bin/hadoop fs -count ."
+./hdfs.sh "-count ."
 ```
 
-### Setting up Cassandra DSE
-
-- version 5.1.20:  `docker pull datastax/dse-server:5.1.20`
-- driver: https://docs.datastax.com/en/developer/java-driver/4.13/
-
-#### Running locally
-
+... and to delete them
 ```bash
-sudo docker run -e DS_LICENSE=accept --network host --name dse_5.1.20 -d datastax/dse-server:5.1.20
+./hdfs.sh "-rm -r /users/root/*"
 ```
+
+### Creating a Kafka topic and testing it
+
+In the `bin` directory of the Kafka install
+
+```sh
+./kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic cloudproof-demo
+```
+
+In a terminal window, create a producer:
+
+```sh
+./kafka-console-producer.sh --broker-list localhost:9092 --topic cloudproof-demo
+```
+
+... and in another window create a consumer...
+
+```sh
+./kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic cloudproof-demo
+```
+
+... then type a message in the producer window, it should appear in the consumer window
+
+
 
 ### Building a zip of this demo
 

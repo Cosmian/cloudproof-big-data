@@ -1,19 +1,24 @@
 package com.cosmian.cloudproof_demo.sse;
 
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.crypto.BadPaddingException;
@@ -47,7 +52,7 @@ public class Sse {
             System.arraycopy(ciphertext, 0, result, 12, ciphertext.length);
             return result;
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException
-                | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+            | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             throw new CosmianException("Failed encrypting: " + e.getMessage(), e);
         }
     }
@@ -63,16 +68,15 @@ public class Sse {
             cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmIv);
             return cipher.doFinal(ciphertext, 12, ciphertext.length - 12);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException
-                | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
+            | InvalidAlgorithmParameterException | IllegalBlockSizeException | BadPaddingException e) {
             throw new CosmianException("Failed decrypting: " + e.getMessage(), e);
         }
     }
 
     /**
-     * A Byte array that implements hashcode() and equals() and hence can be used in
-     * Maps
+     * A Byte array that implements hashcode() and equals() and hence can be used in Maps
      */
-    public static abstract class Bytes {
+    public static abstract class Bytes implements Serializable {
         protected final byte[] bytes;
 
         /**
@@ -87,7 +91,7 @@ public class Sse {
         /**
          * Generate a random byte array
          * 
-         * @param rd     the {@link Random} generator
+         * @param rd the {@link Random} generator
          * @param length the byte array length
          */
         public Bytes(Random rd, int length) {
@@ -167,6 +171,16 @@ public class Sse {
         public DbUid(Random rd, int length) {
             super(rd, length);
         }
+
+        @Override
+        public boolean equals(Object o) {
+
+            if (o != null && o instanceof DbUid) {
+                DbUid other = (DbUid) o;
+                return Arrays.equals(this.bytes, other.bytes);
+            }
+            return false;
+        }
     }
 
     /**
@@ -189,7 +203,7 @@ public class Sse {
          * Build a key by deriving another key and some derivation data
          * 
          * @param fromKey the other key bytes
-         * @param data    the derivation data
+         * @param data the derivation data
          * @throws CosmianException
          */
         public static Key derive(byte[] fromKey, byte[] data) throws CosmianException {
@@ -207,7 +221,7 @@ public class Sse {
          * Build a key by deriving another key and some derivation data
          * 
          * @param fromKey the key to derive from
-         * @param data    the derivation data
+         * @param data the derivation data
          * @throws CosmianException
          */
         public static Key derive(Key fromKey, byte[] data) throws CosmianException {
@@ -217,32 +231,40 @@ public class Sse {
     }
 
     /**
-     * A clear text Entry table value. where - r is the last value of the chain and
-     * - Kwᵢ the key for keyword wᵢ which
-     * is derived ah H(K*, wᵢ) where ---- K* is key only known by the Directory
-     * Authority and ---- wᵢ is the word which
+     * A clear text Entry table value. where - r is the last value of the chain and - Kwᵢ the key for keyword wᵢ which
+     * is derived ah H(K*, wᵢ) where ---- K* is key only known by the Directory Authority and ---- wᵢ is the word which
      * is indexed The value saved in the table is the cipher text: AES(K₂, (r, Kwᵢ))
      */
     static class EntryTableValue {
+
+        // this should never be updated
+        private int revision;
 
         private Key r;
 
         private final Key kwi;
 
         public EntryTableValue(Key r, Key kStar, Word wi) throws CosmianException {
+            this.revision = 0;
             this.r = r;
             this.kwi = Key.derive(kStar, wi.bytes());
 
         }
 
-        protected EntryTableValue(Key r, Key kwi) throws CosmianException {
+        // protected EntryTableValue(Key r, Key kwi) throws CosmianException {
+        // this.revision = 0;
+        // this.r = r;
+        // this.kwi = kwi;
+        // }
+
+        protected EntryTableValue(int revision, Key r, Key kwi) throws CosmianException {
+            this.revision = revision;
             this.r = r;
             this.kwi = kwi;
         }
 
         /**
-         * Set r = H(Kwᵢ,r) which determines the next value in the chain to use in the
-         * Chain table
+         * Set r = H(Kwᵢ,r) which determines the next value in the chain to use in the Chain table
          */
         public void nextR() throws CosmianException {
             try {
@@ -252,44 +274,68 @@ public class Sse {
             }
         }
 
+        public void incrementRevision() {
+            this.revision += 1;
+        }
+
         /**
-         * The AES cipher text of the entry table value encrypted under key K₂
+         * The DB Record with ciphertext set to the AES cipher of the entry table value encrypted under key K₂
          * 
          * @param keyK2 the encryption key
          * @return the cipher text
          * @throws CosmianException
          */
-        public byte[] toBytes(Key keyK2) throws CosmianException {
+        public DBEntryTableRecord toRecord(Key keyK2) throws CosmianException {
             byte[] plaintext = new byte[2 * Key.KEY_LENGTH];
             System.arraycopy(this.r.bytes, 0, plaintext, 0, Key.KEY_LENGTH);
             System.arraycopy(this.kwi.bytes, 0, plaintext, Key.KEY_LENGTH, Key.KEY_LENGTH);
-            try {
-                return encryptAes(SECURE_RANDOM, keyK2, plaintext);
-            } catch (CosmianException e) {
-                throw new CosmianException(
-                        "Failed encrypting the Entry Table Value under key K₂: " + e.getCause().getMessage(), e);
-            }
+            final int revision = this.revision;
+            final byte[] ciphertext = encryptAes(SECURE_RANDOM, keyK2, plaintext);
+            return new DBEntryTableRecord() {
+
+                @Override
+                public int getRevision() {
+                    return revision;
+                }
+
+                @Override
+                public byte[] getEncryptedValue() {
+                    return ciphertext;
+                }
+
+            };
         }
 
         /**
          * Decrypt the Entry Table value using key K₂
          * 
          * @param encryptedValue the encrypted entry valu
-         * @param keyK2          the decryption Key
+         * @param keyK2 the decryption Key
          * @return a {@link EntryTableValue}
          * @throws CosmianException if the it cannot be decrypted
          */
-        public static EntryTableValue fromBytes(byte[] encryptedValue, Key keyK2) throws CosmianException {
+        public static EntryTableValue fromRecord(DBEntryTableRecord record, Key keyK2) throws CosmianException {
             byte[] plaintext;
             try {
-                plaintext = decryptAes(SECURE_RANDOM, keyK2, encryptedValue);
+                plaintext = decryptAes(SECURE_RANDOM, keyK2, record.getEncryptedValue());
             } catch (CosmianException e) {
                 throw new CosmianException(
-                        "Failed decrypting the Entry Table Value under key K₂: " + e.getCause().getMessage(), e);
+                    "Failed decrypting the Entry Table Value under key K₂: " + e.getCause().getMessage(), e);
             }
             Key r = new Key(Arrays.copyOfRange(plaintext, 0, Key.KEY_LENGTH));
             Key kwi = new Key(Arrays.copyOfRange(plaintext, Key.KEY_LENGTH, Key.KEY_LENGTH + Key.KEY_LENGTH));
-            return new EntryTableValue(r, kwi);
+            return new EntryTableValue(record.getRevision(), r, kwi);
+        }
+    }
+
+    static class ChainTableUpdate {
+        public Key key;
+
+        public byte[] value;
+
+        public ChainTableUpdate(Key key, byte[] value) {
+            this.key = key;
+            this.value = value;
         }
     }
 
@@ -297,42 +343,50 @@ public class Sse {
     // known by every authorized clients
     // (= applications) - they can be overwritten by setting the public static
     // variable
-    private static byte[] K1_SALT = { (byte) 0x6B, (byte) 0x66, (byte) 0xF3, (byte) 0x19, (byte) 0x28, (byte) 0x72,
-            (byte) 0xFC, (byte) 0x41,
+    private final static byte[] K1_SALT =
+        {(byte) 0x6B, (byte) 0x66, (byte) 0xF3, (byte) 0x19, (byte) 0x28, (byte) 0x72, (byte) 0xFC, (byte) 0x41,
             (byte) 0xED, (byte) 0x17, (byte) 0x59, (byte) 0x74, (byte) 0x35, (byte) 0xAD, (byte) 0xE6, (byte) 0x62,
             (byte) 0xF0, (byte) 0x3D, (byte) 0x4A, (byte) 0x9F, (byte) 0x53, (byte) 0x6B, (byte) 0x76, (byte) 0xF2,
             (byte) 0x4E, (byte) 0xA9, (byte) 0xA2, (byte) 0xB0, (byte) 0xB4, (byte) 0xE6, (byte) 0x46, (byte) 0x57,
             (byte) 0x6A, (byte) 0xDA, (byte) 0x18, (byte) 0x04, (byte) 0x1B, (byte) 0x13, (byte) 0x6B, (byte) 0x5D,
-            (byte) 0x9F, (byte) 0xD0, (byte) 0x1D, (byte) 0x20, (byte) 0x22, (byte) 0xB2, (byte) 0x85, (byte) 0x1F };
+            (byte) 0x9F, (byte) 0xD0, (byte) 0x1D, (byte) 0x20, (byte) 0x22, (byte) 0xB2, (byte) 0x85, (byte) 0x1F};
 
-    private static byte[] K2_SALT = { (byte) 0x22, (byte) 0x8D, (byte) 0x81, (byte) 0xDE, (byte) 0x62, (byte) 0x04,
-            (byte) 0xA6, (byte) 0xB4,
+    private final static byte[] K2_SALT =
+        {(byte) 0x22, (byte) 0x8D, (byte) 0x81, (byte) 0xDE, (byte) 0x62, (byte) 0x04, (byte) 0xA6, (byte) 0xB4,
             (byte) 0x0E, (byte) 0xC5, (byte) 0xA9, (byte) 0x99, (byte) 0x11, (byte) 0x50, (byte) 0x6A, (byte) 0xFC,
             (byte) 0x38, (byte) 0xEE, (byte) 0x52, (byte) 0xDE, (byte) 0x97, (byte) 0xB7, (byte) 0x9C, (byte) 0xFC,
             (byte) 0x0F, (byte) 0x8E, (byte) 0x58, (byte) 0x06, (byte) 0xF7, (byte) 0xED, (byte) 0x48, (byte) 0x9E,
             (byte) 0xBF, (byte) 0x88, (byte) 0x55, (byte) 0x60, (byte) 0xD2, (byte) 0xAD, (byte) 0x5D, (byte) 0x09,
-            (byte) 0xD0, (byte) 0x59, (byte) 0x19, (byte) 0x79, (byte) 0x52, (byte) 0x8E, (byte) 0x86, (byte) 0x55 };
+            (byte) 0xD0, (byte) 0x59, (byte) 0x19, (byte) 0x79, (byte) 0x52, (byte) 0x8E, (byte) 0x86, (byte) 0x55};
 
-    private static int LOOP_ITERATION_LIMIT = 10000;
+    private final static int LOOP_ITERATION_LIMIT = 10000;
 
     /**
-     * Upsert the a set of words for a list od DB UIDs The size of the map should be
-     * significant so that t is hard for
-     * te server to learn anything from the operation by performing a simple
-     * statistical analysis
+     * Upsert the a set of words for a list od DB UIDs The size of the map should be significant so that t is hard for
+     * te server to learn anything from the operation by performing a simple statistical analysis
      * 
-     * @param k            the main symmetric key
-     * @param kStar        the symmetric key known to the updater only
+     * @param k the main symmetric key
+     * @param kStar the symmetric key known to the updater only
      * @param dbUidToWords the set of words to index for each DB entry
-     * @param db           the db that holds the index
+     * @param db the db that holds the index
      * @throws CosmianException if anything wrong happens
      */
-    public static void bulkUpsert(Key k, Key kStar, HashMap<DbUid, Set<Word>> dbUidToWords, DBInterface db)
-            throws CosmianException {
+    public static long[] bulkUpsert(Key k, Key kStar, Map<DbUid, Set<Word>> dbUidToWords, DBInterface db)
+        throws CosmianException {
+
+        // record benchmarks
+        long cryptoTime = 0;
+        long dbTime = 0;
+
+        long thenCrypto1 = System.nanoTime();
 
         // First compute derived keys K1 and K2
         Key k1 = Key.derive(k, K1_SALT);
         Key k2 = Key.derive(k, K2_SALT);
+
+        // record time
+        cryptoTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenCrypto1);
+        long thenDB0 = System.nanoTime();
 
         // build a map of clear text words to DbUidSet and a map of word hash to word
         HashMap<Word, Set<DbUid>> wordToDbUidSet = new HashMap<>();
@@ -352,19 +406,43 @@ public class Sse {
             }
         }
 
+        dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB0);
+
+        // call internal part which may be recursive
+        long[] timings = bulkUpsertInternal(k1, k2, kStar, wordHashToWord, wordToDbUidSet, db);
+
+        return new long[] {cryptoTime + timings[0], dbTime + timings[1]};
+    }
+
+    private static long[] bulkUpsertInternal(Key k1, Key k2, Key kStar, HashMap<WordHash, Word> wordHashToWord,
+        HashMap<Word, Set<DbUid>> wordToDbUidSet, DBInterface db) throws CosmianException {
+
+        // record benchmarks
+        long cryptoTime = 0;
+        long dbTime = 0;
+
+        long thenDB1 = System.nanoTime();
+
         // a map of Table Entry, word hash to clear text values
         HashMap<WordHash, EntryTableValue> entryTableValues = new HashMap<>();
         // fetch the current values from the entry table the given words and decrypt
         // them
-        for (Map.Entry<WordHash, byte[]> entry : db.getEntryTableEntries(wordHashToWord.keySet()).entrySet()) {
-            entryTableValues.put(entry.getKey(), EntryTableValue.fromBytes(entry.getValue(), k2));
+        for (Map.Entry<WordHash, DBEntryTableRecord> entry : db.getEntryTableEntries(wordHashToWord.keySet())
+            .entrySet()) {
+            EntryTableValue etv = EntryTableValue.fromRecord(entry.getValue(), k2);
+            etv.incrementRevision();
+            entryTableValues.put(entry.getKey(), etv);
         }
+
+        dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB1);
+        long thenCrypto2 = System.nanoTime();
+
         // the entries that will be updated in the Entry table and their encrypted
         // values
-        HashMap<WordHash, byte[]> entryTableUpdates = new HashMap<>();
+        HashMap<WordHash, DBEntryTableRecord> entryTableUpdates = new HashMap<>(wordHashToWord.size());
 
         // entries in the Chain Table
-        HashMap<Key, byte[]> chainTableUpdates = new HashMap<>();
+        HashMap<WordHash, List<ChainTableUpdate>> chainTableUpdatesMap = new HashMap<>();
 
         for (Map.Entry<WordHash, Word> entry : wordHashToWord.entrySet()) {
 
@@ -390,7 +468,20 @@ public class Sse {
             Iterator<DbUid> it = dbUidSet.iterator();
             while (true) {
                 DbUid dbUid = it.next();
-                chainTableUpdates.put(entryTableValue.r, generateChainTableValue(entryTableValue.kwi, dbUid));
+                final EntryTableValue etv = entryTableValue;
+                chainTableUpdatesMap.compute(wordHash, (wh, list) -> {
+                    if (list == null) {
+                        list = new ArrayList<ChainTableUpdate>();
+                    }
+                    try {
+                        list.add(new ChainTableUpdate(etv.r, generateChainTableValue(etv.kwi, dbUid)));
+                    } catch (CosmianException e1) {
+                        logger.severe("Failed generating the chain table value for dbUid " + dbUid.toString()
+                            + ", wordHash " + wordHash.toString());
+                    }
+                    return list;
+                });
+                // chainTableUpdates.put(entryTableValue.r, generateChainTableValue(entryTableValue.kwi, dbUid));
                 if (it.hasNext()) {
                     // increment the next r value
                     entryTableValue.nextR();
@@ -401,18 +492,61 @@ public class Sse {
             }
 
             // update the entry table
-            entryTableUpdates.put(wordHash, entryTableValue.toBytes(k2));
+            entryTableUpdates.put(wordHash, entryTableValue.toRecord(k2));
+            logger.fine(() -> "SSE: added entry table entry: " + wordHash.toString());
         }
 
+        cryptoTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenCrypto2);
+        long thenDB2 = System.nanoTime();
+
         // perform the DB updates
-        db.upsertEntryTableEntries(entryTableUpdates);
-        db.upsertChainTableEntries(chainTableUpdates);
+        Map<WordHash, Boolean> results = db.upsertEntryTableEntries(entryTableUpdates);
+        // - for Word hashes updated (i.e. result==true) perform the updates to the chain table
+        // - for the other one, attempt re-insertion
+        Map<Key, byte[]> chainTableUpdates = new HashMap<>();
+        results.entrySet().stream().filter(e -> e.getValue()).forEach(entry -> {
+            WordHash wordHash = entry.getKey();
+            // remove word from ap to DbUids
+            Word word = wordHashToWord.get(wordHash);
+            if (word == null) {
+                logger.warning("No word for word hash: " + wordHash.toString() + ". This should not happen");
+                return;
+            }
+            // these words were inserted and do not need to be retried
+            wordToDbUidSet.remove(word);
+            wordHashToWord.remove(wordHash);
+            // ... and the corresponding entries must be added to the chain table
+            List<ChainTableUpdate> list = chainTableUpdatesMap.get(wordHash);
+            if (list == null) {
+                logger.warning("No chain table updates for word: " + word + ". This should not happen");
+                return;
+            }
+            list.stream().forEach(ctu -> chainTableUpdates.put(ctu.key, ctu.value));
+        });
+        // perform updates on chain table
+        if (chainTableUpdates.size() > 0) {
+            db.upsertChainTableEntries(chainTableUpdates);
+        }
+
+        dbTime += TimeUnit.NANOSECONDS.toMicros(System.nanoTime() - thenDB2);
+
+        Level level = wordToDbUidSet.size() > 0 ? Level.INFO : Level.FINE;
+        logger.log(level, () -> "SSE: " + Thread.currentThread().getName() + ": total words: "
+            + entryTableUpdates.size() + ", " + wordToDbUidSet.size() + " words need to be retried");
+
+        // retry failed/conflicted entries to entry table
+        if (wordToDbUidSet.size() > 0) {
+            long[] times = bulkUpsertInternal(k1, k2, kStar, wordHashToWord, wordToDbUidSet, db);
+            cryptoTime += times[0];
+            dbTime += times[1];
+        }
+        return new long[] {cryptoTime, dbTime};
     }
 
     /**
      * Generate the chain table value AES(Kwᵢ, dbUID)
      * 
-     * @param kwi   the derived key for the word
+     * @param kwi the derived key for the word
      * @param dbUid the DB table UUID
      * @return the generated value
      * @throws CosmianException if encryption fails
@@ -422,14 +556,14 @@ public class Sse {
             return encryptAes(SECURE_RANDOM, kwi, dbUid.bytes);
         } catch (CosmianException e) {
             throw new CosmianException(
-                    "Failed encrypting the Chain Table Value under key Kwᵢ: " + e.getCause().getMessage(), e);
+                "Failed encrypting the Chain Table Value under key Kwᵢ: " + e.getCause().getMessage(), e);
         }
     }
 
     /**
      * Decrypt the Chain Table value to retrieve the UID
      * 
-     * @param kwi            the derived key for the word
+     * @param kwi the derived key for the word
      * @param encryptedValue the encrypted DB UID
      * @return the DB UID
      * @throws CosmianException if the value cannot be decrypted
@@ -440,7 +574,7 @@ public class Sse {
             dbUid = decryptAes(SECURE_RANDOM, kwi, encryptedValue);
         } catch (CosmianException e) {
             throw new CosmianException(
-                    "Failed decrypting the Chain Table Value under key Kwᵢ: " + e.getCause().getMessage(), e);
+                "Failed decrypting the Chain Table Value under key Kwᵢ: " + e.getCause().getMessage(), e);
         }
         return new DbUid(dbUid);
     }
@@ -448,42 +582,48 @@ public class Sse {
     /**
      * Retrieve the set of DB Uid for a given set of words
      * 
-     * @param k     the main symmetric key
+     * @param k the main symmetric key
      * @param words the set of words
-     * @param db    the key value store holding the indexes
+     * @param db the key value store holding the indexes
      * @return a map of Word -> [dbUid,...]
      * @throws CosmianException if an error occurs
      */
     public static HashMap<Word, Set<DbUid>> bulkRetrieve(Key k, Set<Word> words, DBInterface db)
-            throws CosmianException {
+        throws CosmianException {
 
         // First compute derived keys K1 and K2
         Key k1 = Key.derive(k, K1_SALT);
         Key k2 = Key.derive(k, K2_SALT);
 
+        logger.finer(() -> "SSE: searching " + words.size() + " word: " + Arrays.toString(words.toArray()));
         HashMap<WordHash, Word> wordHashToWord = new HashMap<>();
         for (Word wi : words) {
-            wordHashToWord.put(wi.hash(k1.bytes), wi);
+            WordHash wh = wi.hash(k1.bytes);
+            logger.finer(() -> "SSE: searching word: " + wh.toString());
+            wordHashToWord.put(wh, wi);
         }
 
         HashMap<Word, Set<DbUid>> results = new HashMap<>();
 
         // retrieve the Entry Table entries for the words
-        HashMap<WordHash, byte[]> entryTable = db.getEntryTableEntries(wordHashToWord.keySet());
+        Map<WordHash, DBEntryTableRecord> entryTable = db.getEntryTableEntries(wordHashToWord.keySet());
         if (entryTable.size() == 0) {
             logger.fine(() -> "Search: words not found in the entry table");
             return results;
         }
-        logger.fine(() -> "Search: found " + entryTable.size() + " words in entry table out of " + words.size());
+        logger.fine(() -> "Search: found " + entryTable.size() + " words in entry table out of " + words.size()
+            + " words searched");
 
         for (Map.Entry<WordHash, Word> entry : wordHashToWord.entrySet()) {
             WordHash wordHash = entry.getKey();
             Word wi = entry.getValue();
-            byte[] encEntryTableValues = entryTable.get(wordHash);
+            DBEntryTableRecord record = entryTable.get(wordHash);
+            byte[] encEntryTableValues = record.getEncryptedValue();
             if (encEntryTableValues == null) {
-
+                results.put(wi, new HashSet<>());
+                continue;
             }
-            EntryTableValue entryTableValue = EntryTableValue.fromBytes(encEntryTableValues, k2);
+            EntryTableValue entryTableValue = EntryTableValue.fromRecord(record, k2);
 
             Set<Key> chainTableKeys = new HashSet<>();
             // the start of the chan value is r = H(Kwᵢ, wᵢ)
@@ -504,7 +644,7 @@ public class Sse {
                 dbUidSet.add(getDbUidFromChainTableValue(entryTableValue.kwi, encDbUid));
             }
             logger.fine(() -> "Word " + new String(wi.bytes, StandardCharsets.UTF_8) + " has " + dbUidSet.size()
-                    + " distinct DB UIDs");
+                + " distinct DB UIDs");
             results.put(wi, dbUidSet);
         }
         return results;
